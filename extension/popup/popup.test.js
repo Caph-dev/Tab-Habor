@@ -33,7 +33,10 @@ globalThis.document = {
 globalThis.window = { close: () => {} };
 
 // Mock popup.js dependencies (empty — functions should fall back safely)
-globalThis.TabOutThemeControls = { filterRealTabs: tabs => Array.isArray(tabs) ? tabs : [] };
+globalThis.TabOutThemeControls = {
+  filterRealTabs: tabs => Array.isArray(tabs) ? tabs : [],
+  getQuickShortcutIconStylePreferences: () => ({ iconSize: 34, iconMaskRadius: 9 }),
+};
 globalThis.TabOutIconUtils = {
   escapeHtmlAttribute: v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
   getIconSources: () => ({ sources: [], hostname: '' }),
@@ -389,6 +392,41 @@ test('renderShortcutCard renders image icon when iconKind is image', () => {
   assert.ok(html.includes('quick-shortcut-icon-custom'));
   assert.ok(html.includes('src="https://github.com/favicon.ico"'));
   assert.ok(html.includes('<span class="quick-shortcut-label">GitHub</span>'));
+  assert.ok(!html.includes('has-rounded-icon-mask'));
+});
+
+test('renderShortcutCard renders rounded icon mask settings', () => {
+  const shortcut = {
+    label: 'GitHub',
+    url: 'https://github.com',
+    iconKind: 'image',
+    icon: 'https://github.com/favicon.ico',
+    iconMask: 'rounded',
+    iconSize: 36,
+    iconMaskRadius: 12,
+  };
+  const html = renderShortcutCard(shortcut, 0);
+
+  assert.ok(html.includes('has-rounded-icon-mask'));
+  assert.ok(html.includes('--shortcut-icon-size:34px'));
+  assert.ok(html.includes('--shortcut-icon-radius:9px'));
+  assert.ok(html.includes('quick-shortcut-icon-auto-stretch'));
+  assert.ok(html.includes('data-auto-stretch-icon="true"'));
+});
+
+test('renderShortcutCard ignores per-shortcut rounded icon radius', () => {
+  const shortcut = {
+    label: 'GitHub',
+    url: 'https://github.com',
+    iconKind: 'image',
+    icon: 'https://github.com/favicon.ico',
+    iconMask: 'rounded',
+    iconSize: 36,
+    iconMaskRadius: 0,
+  };
+  const html = renderShortcutCard(shortcut, 0);
+
+  assert.ok(html.includes('--shortcut-icon-radius:9px'));
 });
 
 test('renderShortcutCard renders svg icon when iconKind is svg', () => {

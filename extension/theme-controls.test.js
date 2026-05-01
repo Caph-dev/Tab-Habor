@@ -24,9 +24,17 @@ globalThis.window = {
 require('./theme-controls.js');
 
 const {
+  createShortcutIconCandidates,
+  extractShortcutIconCandidatesFromHtml,
   filterRealTabs,
+  getCodelifeFaviconUrl,
+  getShortcutIconSearchHostname,
+  getQuickShortcutIconStyleAttribute,
+  getQuickShortcutIconStylePreferences,
   getResolvedThemeDefinition,
   getResolvedTone,
+  normalizeShortcutIconRadius,
+  normalizeShortcutIconSize,
   normalizeShortcutUrl,
   normalizeQuickShortcuts,
   normalizeThemePreferences,
@@ -52,6 +60,15 @@ test('normalizeThemePreferences keeps explicit mode and palette values', () => {
   assert.equal(result.mode, 'system');
   assert.equal(result.paletteId, 'blush');
   assert.equal(result.surfaceOpacity, 9);
+});
+
+test('normalizeThemePreferences keeps global quick shortcut icon style', () => {
+  const result = normalizeThemePreferences({
+    quickShortcutIconSize: 38,
+    quickShortcutIconRadius: 14,
+  });
+  assert.equal(result.quickShortcutIconSize, 38);
+  assert.equal(result.quickShortcutIconRadius, 14);
 });
 
 test('getResolvedTone follows system preference when mode is system', () => {
@@ -194,6 +211,9 @@ test('normalizeQuickShortcuts defaults iconKind to empty string for no icon', ()
   const input = [{ id: 's1', url: 'https://ex.com' }];
   const result = normalizeQuickShortcuts(input);
   assert.equal(result[0].iconKind, '');
+  assert.equal(result[0].iconMask, 'none');
+  assert.equal('iconSize' in result[0], false);
+  assert.equal('iconMaskRadius' in result[0], false);
 });
 
 test('normalizeQuickShortcuts infers iconKind from icon content', () => {
@@ -208,4 +228,85 @@ test('normalizeQuickShortcuts normalizes icon URL to image kind', () => {
   const result = normalizeQuickShortcuts(input);
   assert.equal(result[0].iconKind, 'image');
   assert.equal(result[0].icon, 'https://ex.com/f.png');
+});
+
+test('normalizeQuickShortcuts preserves rounded icon mask but ignores per-shortcut style settings', () => {
+  const input = [{
+    id: 's1',
+    url: 'https://ex.com',
+    icon: 'https://ex.com/f.png',
+    iconMask: 'rounded',
+    iconSize: 38,
+    iconMaskRadius: 14,
+  }];
+  const result = normalizeQuickShortcuts(input);
+
+  assert.equal(result[0].iconMask, 'rounded');
+  assert.equal('iconSize' in result[0], false);
+  assert.equal('iconMaskRadius' in result[0], false);
+});
+
+test('icon mask style helpers clamp to supported ranges', () => {
+  assert.equal(normalizeShortcutIconSize(99, 'rounded'), 40);
+  assert.equal(normalizeShortcutIconSize('bad', 'rounded'), 36);
+  assert.equal(normalizeShortcutIconRadius(-1, 'rounded'), 0);
+  assert.equal(normalizeShortcutIconRadius('bad', 'rounded'), 10);
+});
+
+test('quick shortcut icon style helpers expose global CSS variables', () => {
+  assert.deepEqual(getQuickShortcutIconStylePreferences({
+    quickShortcutIconSize: 99,
+    quickShortcutIconRadius: -1,
+  }), {
+    iconSize: 40,
+    iconMaskRadius: 0,
+  });
+  assert.equal(
+    getQuickShortcutIconStyleAttribute({
+      quickShortcutIconSize: 32,
+      quickShortcutIconRadius: 12,
+    }),
+    '--shortcut-icon-size:32px;--shortcut-icon-radius:12px'
+  );
+});
+
+test('getShortcutIconSearchHostname normalizes URL-like input before icon search', () => {
+  assert.equal(getShortcutIconSearchHostname('github.com/V-IOLE-T'), 'github.com');
+  assert.equal(getShortcutIconSearchHostname('chrome://bookmarks'), '');
+  assert.equal(getShortcutIconSearchHostname('not a url'), '');
+});
+
+test('createShortcutIconCandidates returns common website icon sources', () => {
+  const candidates = createShortcutIconCandidates('https://github.com/V-IOLE-T');
+  const urls = candidates.map(candidate => candidate.url);
+
+  assert.ok(urls.some(url => url.startsWith('https://ico.codelife.cc/faviconV2?')));
+  assert.ok(urls.includes('https://github.com/favicon.ico'));
+  assert.ok(urls.includes('https://github.com/apple-touch-icon.png'));
+  assert.ok(urls.some(url => url.includes('www.google.com/s2/favicons')));
+  assert.equal(new Set(urls).size, urls.length);
+});
+
+test('getCodelifeFaviconUrl follows the iTab favicon service shape', () => {
+  const iconUrl = getCodelifeFaviconUrl('https://github.com/V-IOLE-T', 64);
+
+  assert.ok(iconUrl.startsWith('https://ico.codelife.cc/faviconV2?'));
+  assert.ok(iconUrl.includes('client=SOCIAL'));
+  assert.ok(iconUrl.includes('type=FAVICON'));
+  assert.ok(iconUrl.includes('fallback_opts=TYPE%2CSIZE%2CURL'));
+  assert.ok(iconUrl.includes('url=https%3A%2F%2Fgithub.com%2FV-IOLE-T'));
+  assert.ok(iconUrl.includes('size=64'));
+});
+
+test('extractShortcutIconCandidatesFromHtml reads declared site icons', () => {
+  const candidates = extractShortcutIconCandidatesFromHtml(`
+    <link rel="icon" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="https://cdn.example.com/apple.png">
+    <link rel="stylesheet" href="/app.css">
+  `, 'https://example.com/docs/page');
+  const urls = candidates.map(candidate => candidate.url);
+
+  assert.ok(urls.includes('https://example.com/favicon.svg'));
+  assert.ok(urls.includes('https://cdn.example.com/apple.png'));
+  assert.equal(urls.length, 2);
 });

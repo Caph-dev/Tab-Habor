@@ -1,6 +1,11 @@
 'use strict';
 
 const {
+  t: drawerT,
+  applyDomTranslations: drawerApplyDomTranslations,
+} = globalThis.TabHarborI18n || {};
+
+const {
   escapeHtml: drawerEscapeHtml,
   getFallbackLabel: drawerGetFallbackLabel,
   getIconSources: drawerGetIconSources,
@@ -34,6 +39,20 @@ let savedSearchOpen = false;
 let savedSearchQuery = '';
 let drawerFocusReturnEl = null;
 const TODOS_KEY = 'todos';
+
+const DRAWER_LABEL_FALLBACKS = {
+  openSavedForLater: 'Open saved for later',
+  closeSavedForLater: 'Close saved for later',
+  openTodos: 'Open todos',
+  closeTodos: 'Close todos',
+};
+
+const drawerLabel = key => (drawerT ? drawerT(key) : DRAWER_LABEL_FALLBACKS[key] || key);
+
+function drawerSavedItemsCount(count) {
+  const key = count === 1 ? 'savedItemsCountSingular' : 'savedItemsCountPlural';
+  return drawerT ? drawerT(key, { count }) : `${count} item${count !== 1 ? 's' : ''}`;
+}
 
 async function loadDeferredTriggerPosition() {
   const stored = await chrome.storage.local.get(DEFERRED_TRIGGER_POSITION_KEY);
@@ -344,10 +363,13 @@ async function renderDeferredColumn() {
     column.classList.toggle('open', deferredPanelOpen);
     column.setAttribute('aria-hidden', String(!deferredPanelOpen));
     trigger.setAttribute('aria-expanded', String(deferredPanelOpen));
-    trigger.setAttribute('aria-label', deferredPanelOpen ? 'Close saved for later' : 'Open saved for later');
+    trigger.setAttribute('aria-label', drawerLabel(deferredPanelOpen ? 'closeSavedForLater' : 'openSavedForLater'));
     if (todoTrigger) {
       todoTrigger.setAttribute('aria-expanded', String(deferredPanelOpen && drawerView === 'todos'));
-      todoTrigger.setAttribute('aria-label', deferredPanelOpen && drawerView === 'todos' ? 'Close todos' : 'Open todos');
+      todoTrigger.setAttribute(
+        'aria-label',
+        drawerLabel(deferredPanelOpen && drawerView === 'todos' ? 'closeTodos' : 'openTodos')
+      );
     }
     overlay.hidden = !deferredPanelOpen;
     overlay.classList.toggle('visible', deferredPanelOpen);
@@ -373,6 +395,10 @@ async function renderDeferredColumn() {
       const archiveExpanded = archiveBody.style.display !== 'none' && !archiveBody.hidden;
       archiveToggle.setAttribute('aria-expanded', String(archiveExpanded));
     }
+    if (drawerApplyDomTranslations) {
+      drawerApplyDomTranslations(column);
+      if (triggerStack) drawerApplyDomTranslations(triggerStack);
+    }
 
     const savedNeedle = savedSearchQuery.trim().toLowerCase();
     const filteredActive = !savedNeedle
@@ -389,7 +415,7 @@ async function renderDeferredColumn() {
         );
 
     if (filteredActive.length > 0) {
-      countEl.textContent = `${active.length} item${active.length !== 1 ? 's' : ''}`;
+      countEl.textContent = drawerSavedItemsCount(active.length);
       list.innerHTML = filteredActive.map(item => renderDeferredItem(item)).join('');
       list.style.display = 'block';
       empty.style.display = 'none';

@@ -8,6 +8,7 @@ const {
   escapeHtml: themeEscapeHtml,
   escapeHtmlAttribute: themeEscapeHtmlAttribute,
   getFallbackLabel: themeGetFallbackLabel,
+  getGoogleFaviconUrl: themeGetGoogleFaviconUrl,
   getIconSources: themeGetIconSources,
 } = globalThis.TabOutIconUtils || {};
 
@@ -39,6 +40,12 @@ let quickShortcutGhostEl = null;
 let quickShortcutSlotEl = null;
 let quickShortcutSuppressClickUntil = 0;
 let quickShortcutMiddleClickSuppressUntil = 0;
+let shortcutIconSearchState = {
+  token: 0,
+  status: 'idle',
+  candidates: [],
+  message: '',
+};
 
 // ---- Tab Picker state ----
 let tabPickerOpen = false;
@@ -62,6 +69,15 @@ const THEME_MODE_ORDER = ['system', 'light', 'dark'];
 const THEME_PALETTE_ORDER = ['paper', 'sage', 'mist', 'blush'];
 const VALID_THEME_MODES = new Set(THEME_MODE_ORDER);
 const VALID_THEME_PALETTES = new Set(THEME_PALETTE_ORDER);
+const SHORTCUT_ICON_SEARCH_TIMEOUT = 2600;
+const SHORTCUT_ICON_DEFAULT_SIZE = 30;
+const SHORTCUT_ICON_MASK_SIZE = 36;
+const SHORTCUT_ICON_DEFAULT_RADIUS = 0;
+const SHORTCUT_ICON_MASK_RADIUS = 10;
+const SHORTCUT_ICON_MIN_SIZE = 24;
+const SHORTCUT_ICON_MAX_SIZE = 40;
+const SHORTCUT_ICON_MIN_RADIUS = 0;
+const SHORTCUT_ICON_MAX_RADIUS = 20;
 const THEME_MODE_LABEL_KEYS = {
   system: 'themeModeSystem',
   light: 'themeModeLight',
@@ -242,6 +258,8 @@ let themePreferences = {
   paletteId: 'paper',
   customBackground: '',
   surfaceOpacity: 14,
+  quickShortcutIconSize: SHORTCUT_ICON_DEFAULT_SIZE,
+  quickShortcutIconRadius: SHORTCUT_ICON_MASK_RADIUS,
   hitokotoEnabled: true,
 };
 
@@ -258,11 +276,14 @@ function normalizeThemePreferences(input) {
   const surfaceOpacity = Number.isFinite(rawOpacity)
     ? Math.min(60, Math.max(2, Math.round(rawOpacity)))
     : 14;
+  const shortcutIconStyle = getQuickShortcutIconStylePreferences(next);
   return {
     mode: VALID_THEME_MODES.has(rawMode) ? rawMode : 'system',
     paletteId: VALID_THEME_PALETTES.has(rawPaletteId) ? rawPaletteId : 'paper',
     customBackground: typeof next.customBackground === 'string' ? next.customBackground : '',
     surfaceOpacity,
+    quickShortcutIconSize: shortcutIconStyle.iconSize,
+    quickShortcutIconRadius: shortcutIconStyle.iconMaskRadius,
     hitokotoEnabled: next.hitokotoEnabled !== false,
   };
 }
@@ -273,15 +294,49 @@ function normalizeQuickShortcuts(input) {
     .filter(item => item && item.url)
     .map(item => {
       const normalizedIcon = normalizeShortcutIcon(item.icon || item.customIcon || '');
+      const iconMask = String(item.iconMask || '') === 'rounded' ? 'rounded' : 'none';
       return {
         id: String(item.id || `shortcut-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
         url: String(item.url).trim(),
         label: String(item.label || '').trim(),
         icon: normalizedIcon.value,
         iconKind: normalizedIcon.kind,
+        iconMask,
       };
     })
     .filter(item => item.url);
+}
+
+function clampNumber(value, min, max, fallback) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(numericValue)));
+}
+
+function normalizeShortcutIconSize(value, iconMask = 'none') {
+  return clampNumber(
+    value,
+    SHORTCUT_ICON_MIN_SIZE,
+    SHORTCUT_ICON_MAX_SIZE,
+    iconMask === 'rounded' ? SHORTCUT_ICON_MASK_SIZE : SHORTCUT_ICON_DEFAULT_SIZE
+  );
+}
+
+function normalizeShortcutIconRadius(value, iconMask = 'none') {
+  return clampNumber(
+    value,
+    SHORTCUT_ICON_MIN_RADIUS,
+    SHORTCUT_ICON_MAX_RADIUS,
+    iconMask === 'rounded' ? SHORTCUT_ICON_MASK_RADIUS : SHORTCUT_ICON_DEFAULT_RADIUS
+  );
+}
+
+function getQuickShortcutIconStylePreferences(input = themePreferences) {
+  const next = input && typeof input === 'object' ? input : {};
+  return {
+    iconSize: normalizeShortcutIconSize(next.quickShortcutIconSize, 'none'),
+    iconMaskRadius: normalizeShortcutIconRadius(next.quickShortcutIconRadius, 'rounded'),
+  };
 }
 
 function isSvgMarkup(value) {
@@ -437,16 +492,34 @@ function computeThemeOpacityVars(surfaceOpacity) {
   };
 }
 
+function computeQuickShortcutIconStyleVars(input = themePreferences) {
+  const shortcutIconStyle = getQuickShortcutIconStylePreferences(input);
+  return {
+    '--shortcut-icon-size': `${shortcutIconStyle.iconSize}px`,
+    '--shortcut-icon-radius': `${shortcutIconStyle.iconMaskRadius}px`,
+  };
+}
+
+function getQuickShortcutIconStyleAttribute(input = themePreferences) {
+  return Object.entries(computeQuickShortcutIconStyleVars(input))
+    .map(([name, value]) => `${name}:${value}`)
+    .join(';');
+}
+
 function applyThemePreferences() {
   const root = document.documentElement;
   const body = document.body;
   const theme = getResolvedThemeDefinition(themePreferences);
   const opacityVars = computeThemeOpacityVars(themePreferences.surfaceOpacity);
+  const shortcutIconVars = computeQuickShortcutIconStyleVars(themePreferences);
 
   Object.entries(theme.vars).forEach(([name, value]) => {
     root.style.setProperty(name, value);
   });
   Object.entries(opacityVars).forEach(([name, value]) => {
+    root.style.setProperty(name, value);
+  });
+  Object.entries(shortcutIconVars).forEach(([name, value]) => {
     root.style.setProperty(name, value);
   });
   if (body) {
@@ -589,7 +662,110 @@ function normalizeShortcutIcon(input) {
   return { value: glyph, kind: glyph ? 'glyph' : '' };
 }
 
+function getShortcutIconSearchHostname(input) {
+  const normalizedUrl = normalizeShortcutUrl(input);
+  if (!normalizedUrl) return '';
+  try {
+    const url = new URL(normalizedUrl);
+    if (!['http:', 'https:'].includes(url.protocol)) return '';
+    return url.hostname;
+  } catch {
+    return '';
+  }
+}
+
+function getCodelifeFaviconUrl(input, size = 64) {
+  const normalizedUrl = normalizeShortcutUrl(input);
+  if (!normalizedUrl) return '';
+  try {
+    const url = new URL(normalizedUrl);
+    if (!['http:', 'https:'].includes(url.protocol)) return '';
+    const params = new URLSearchParams({
+      client: 'SOCIAL',
+      type: 'FAVICON',
+      fallback_opts: 'TYPE,SIZE,URL',
+      url: normalizedUrl,
+      size: String(size),
+    });
+    return `https://ico.codelife.cc/faviconV2?${params.toString()}`;
+  } catch {
+    return '';
+  }
+}
+
+function createShortcutIconCandidates(input) {
+  const hostname = getShortcutIconSearchHostname(input);
+  if (!hostname) return [];
+
+  const origin = `https://${hostname}`;
+  const googleFaviconUrl = typeof themeGetGoogleFaviconUrl === 'function'
+    ? themeGetGoogleFaviconUrl
+    : ((host, size = 32) => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}`);
+  const rawCandidates = [
+    { id: 'codelife-32', label: 'iTab match 32px', url: getCodelifeFaviconUrl(input, 32) },
+    { id: 'codelife-64', label: 'iTab match 64px', url: getCodelifeFaviconUrl(input, 64) },
+    { id: 'codelife-128', label: 'iTab match 128px', url: getCodelifeFaviconUrl(input, 128) },
+    { id: 'site-favicon', label: 'Site favicon', url: `${origin}/favicon.ico` },
+    { id: 'apple-touch-icon', label: 'Apple touch icon', url: `${origin}/apple-touch-icon.png` },
+    { id: 'apple-touch-icon-precomposed', label: 'Touch icon', url: `${origin}/apple-touch-icon-precomposed.png` },
+    { id: 'favicon-32', label: '32px favicon', url: `${origin}/favicon-32x32.png` },
+    { id: 'favicon-192', label: '192px icon', url: `${origin}/android-chrome-192x192.png` },
+    { id: 'google-32', label: 'Google 32px', url: googleFaviconUrl(hostname, 32) },
+    { id: 'google-64', label: 'Google 64px', url: googleFaviconUrl(hostname, 64) },
+    { id: 'google-128', label: 'Google 128px', url: googleFaviconUrl(hostname, 128) },
+  ];
+
+  const seen = new Set();
+  return rawCandidates.filter(candidate => {
+    if (!candidate.url || seen.has(candidate.url)) return false;
+    seen.add(candidate.url);
+    return true;
+  });
+}
+
+function resolveShortcutIconUrl(value, pageUrl) {
+  const raw = String(value || '').trim();
+  if (!raw || /^data:/i.test(raw)) return '';
+  try {
+    const resolved = new URL(raw, pageUrl);
+    if (!['http:', 'https:'].includes(resolved.protocol)) return '';
+    return resolved.toString();
+  } catch {
+    return '';
+  }
+}
+
+function extractShortcutIconCandidatesFromHtml(html, pageUrl) {
+  const raw = String(html || '');
+  if (!raw || !pageUrl) return [];
+  const candidates = [];
+  const seen = new Set();
+  const linkPattern = /<link\b[^>]*>/gi;
+  let match;
+
+  while ((match = linkPattern.exec(raw))) {
+    const tag = match[0];
+    const rel = tag.match(/\brel\s*=\s*(["'])(.*?)\1/i)?.[2] || '';
+    if (!/\b(?:icon|apple-touch-icon|mask-icon)\b/i.test(rel)) continue;
+
+    const href = tag.match(/\bhref\s*=\s*(["'])(.*?)\1/i)?.[2] || '';
+    const resolvedUrl = resolveShortcutIconUrl(href, pageUrl);
+    if (!resolvedUrl || seen.has(resolvedUrl)) continue;
+    seen.add(resolvedUrl);
+
+    const label = /\bapple-touch-icon\b/i.test(rel)
+      ? 'Apple touch icon'
+      : /\bmask-icon\b/i.test(rel)
+        ? 'Mask icon'
+        : 'Site icon';
+    candidates.push({ id: `html-${candidates.length}`, label, url: resolvedUrl });
+  }
+
+  return candidates;
+}
+
 function createShortcutEditorState(input = {}) {
+  const globalIconStyle = getQuickShortcutIconStylePreferences(themePreferences);
   return {
     open: Boolean(input.open),
     mode: input.mode === 'edit' ? 'edit' : 'create',
@@ -598,6 +774,9 @@ function createShortcutEditorState(input = {}) {
     label: String(input.label || ''),
     icon: String(input.icon || ''),
     iconKind: String(input.iconKind || 'site'),
+    iconMask: input.iconMask === 'rounded' ? 'rounded' : 'none',
+    iconSize: globalIconStyle.iconSize,
+    iconMaskRadius: globalIconStyle.iconMaskRadius,
     presentation: input.presentation === 'tab-picker' ? 'tab-picker' : 'default',
     returnToTabPicker: Boolean(input.returnToTabPicker),
     focusReturnEl: input.focusReturnEl instanceof HTMLElement ? input.focusReturnEl : null,
@@ -629,6 +808,14 @@ function getShortcutEditorElements() {
     emojiGroup: document.getElementById('shortcutEditorEmojiGroup'),
     imageGroup: document.getElementById('shortcutEditorImageGroup'),
     svgGroup: document.getElementById('shortcutEditorSvgGroup'),
+    styleGroup: document.getElementById('shortcutEditorStyleGroup'),
+    maskButtons: [...document.querySelectorAll('[data-action="set-shortcut-icon-mask"]')],
+    iconSize: document.getElementById('shortcutEditorIconSize'),
+    iconRadius: document.getElementById('shortcutEditorIconRadius'),
+    iconSizeValue: document.getElementById('shortcutEditorIconSizeValue'),
+    iconRadiusValue: document.getElementById('shortcutEditorIconRadiusValue'),
+    iconSearchStatus: document.getElementById('shortcutEditorIconSearchStatus'),
+    iconCandidates: document.getElementById('shortcutEditorIconCandidates'),
     preview: document.getElementById('shortcutEditorPreview'),
     previewFallback: document.getElementById('shortcutEditorPreviewFallback'),
     previewTitle: document.getElementById('shortcutEditorPreviewTitle'),
@@ -659,6 +846,88 @@ function syncFormControlValue(element, nextValue) {
   if (element.value !== normalized) {
     element.value = normalized;
   }
+}
+
+function getShortcutIconSearchStatusText() {
+  if (shortcutIconSearchState.message) return shortcutIconSearchState.message;
+  if (shortcutIconSearchState.status === 'loading') {
+    return themeT ? themeT('shortcutIconSearchLoading') : 'Searching website icons...';
+  }
+  if (shortcutIconSearchState.status === 'empty') {
+    return themeT ? themeT('shortcutIconSearchEmpty') : 'No usable icons found for this website.';
+  }
+  if (shortcutIconSearchState.status === 'error') {
+    return themeT ? themeT('shortcutIconSearchError') : 'Could not search icons for this website.';
+  }
+  return '';
+}
+
+function renderShortcutIconSearch(elements = getShortcutEditorElements()) {
+  if (elements.iconSearchStatus) {
+    const statusText = getShortcutIconSearchStatusText();
+    elements.iconSearchStatus.hidden = !statusText;
+    elements.iconSearchStatus.textContent = statusText;
+  }
+
+  if (!elements.iconCandidates) return;
+  elements.iconCandidates.innerHTML = '';
+  shortcutIconSearchState.candidates.forEach(candidate => {
+    const button = document.createElement('button');
+    button.className = 'shortcut-editor-icon-candidate';
+    button.type = 'button';
+    button.dataset.action = 'select-shortcut-icon-candidate';
+    button.dataset.iconUrl = candidate.url;
+    button.setAttribute('aria-label', candidate.label);
+
+    const image = document.createElement('img');
+    image.src = candidate.url;
+    image.alt = '';
+    image.loading = 'lazy';
+    button.appendChild(image);
+
+    const label = document.createElement('span');
+    label.textContent = candidate.label;
+    button.appendChild(label);
+
+    elements.iconCandidates.appendChild(button);
+  });
+}
+
+function syncShortcutEditorStyleControls(elements = getShortcutEditorElements()) {
+  const showStyleControls = ['site', 'image', 'svg', 'glyph'].includes(shortcutEditorState.iconKind);
+  if (elements.styleGroup) {
+    elements.styleGroup.hidden = !showStyleControls;
+  }
+  elements.maskButtons.forEach(button => {
+    const isSelected = button.dataset.mask === shortcutEditorState.iconMask;
+    button.setAttribute('aria-pressed', String(isSelected));
+  });
+  syncFormControlValue(elements.iconSize, shortcutEditorState.iconSize);
+  syncFormControlValue(elements.iconRadius, shortcutEditorState.iconMaskRadius);
+  if (elements.iconSizeValue) {
+    elements.iconSizeValue.textContent = `${shortcutEditorState.iconSize} px`;
+  }
+  if (elements.iconRadiusValue) {
+    elements.iconRadiusValue.textContent = `${shortcutEditorState.iconMaskRadius} px`;
+  }
+}
+
+async function saveGlobalShortcutIconStyle(nextStyle = {}) {
+  const normalizedStyle = getQuickShortcutIconStylePreferences({
+    ...themePreferences,
+    ...nextStyle,
+  });
+  themePreferences = normalizeThemePreferences({
+    ...themePreferences,
+    quickShortcutIconSize: normalizedStyle.iconSize,
+    quickShortcutIconRadius: normalizedStyle.iconMaskRadius,
+  });
+  await chrome.storage.local.set({ [THEME_PREFERENCES_KEY]: themePreferences });
+  shortcutEditorState = createShortcutEditorState(shortcutEditorState);
+  applyThemePreferences();
+  syncShortcutEditor();
+  await renderQuickShortcuts();
+  return normalizedStyle;
 }
 
 function resetShortcutEditorPosition(panel) {
@@ -761,6 +1030,8 @@ function syncShortcutEditor() {
   if (elements.emojiGroup) elements.emojiGroup.hidden = shortcutEditorState.iconKind !== 'glyph';
   if (elements.imageGroup) elements.imageGroup.hidden = shortcutEditorState.iconKind !== 'image';
   if (elements.svgGroup) elements.svgGroup.hidden = shortcutEditorState.iconKind !== 'svg';
+  renderShortcutIconSearch(elements);
+  syncShortcutEditorStyleControls(elements);
 
   const label = shortcutEditorState.label.trim() || shortcutEditorState.url.trim() || (themeT ? themeT('shortcutPreviewFallbackLabel') : 'Shortcut');
   const previewTitle = shortcutEditorState.iconKind === 'image'
@@ -782,6 +1053,9 @@ function syncShortcutEditor() {
 
   if (elements.preview) {
     elements.preview.innerHTML = '';
+    elements.preview.style.setProperty('--preview-icon-size', `${shortcutEditorState.iconSize}px`);
+    elements.preview.style.setProperty('--preview-icon-radius', `${shortcutEditorState.iconMaskRadius}px`);
+    elements.preview.classList.toggle('is-rounded-mask', shortcutEditorState.iconMask === 'rounded');
     if ((shortcutEditorState.iconKind === 'image' || shortcutEditorState.iconKind === 'svg') && shortcutEditorState.icon) {
       const img = document.createElement('img');
       img.src = shortcutEditorState.iconKind === 'svg' ? svgToDataUrl(shortcutEditorState.icon) : shortcutEditorState.icon;
@@ -809,6 +1083,12 @@ function syncShortcutEditor() {
 
 function openShortcutEditor(shortcut = null, triggerEl = null, options = {}) {
   const normalized = shortcut ? normalizeQuickShortcuts([shortcut])[0] : null;
+  shortcutIconSearchState = {
+    token: shortcutIconSearchState.token + 1,
+    status: 'idle',
+    candidates: [],
+    message: '',
+  };
   if (options.presentation === 'tab-picker') {
     mountShortcutEditorInTabPicker();
   } else {
@@ -822,6 +1102,7 @@ function openShortcutEditor(shortcut = null, triggerEl = null, options = {}) {
     label: normalized?.label || '',
     icon: normalized?.icon || '',
     iconKind: normalized?.iconKind || 'site',
+    iconMask: normalized?.iconMask || 'none',
     presentation: options.presentation,
     returnToTabPicker: options.returnToTabPicker,
     focusReturnEl: triggerEl instanceof HTMLElement ? triggerEl : document.activeElement,
@@ -839,6 +1120,12 @@ function closeShortcutEditor({ restoreFocus = true } = {}) {
   const focusTarget = shortcutEditorState.focusReturnEl;
   const wasEmbedded = shortcutEditorState.presentation === 'tab-picker';
   resetShortcutEditorPosition(getShortcutEditorElements().modalPanel);
+  shortcutIconSearchState = {
+    token: shortcutIconSearchState.token + 1,
+    status: 'idle',
+    candidates: [],
+    message: '',
+  };
   shortcutEditorState = createShortcutEditorState();
   syncShortcutEditor();
   restoreShortcutEditorHome();
@@ -852,6 +1139,14 @@ function closeShortcutEditor({ restoreFocus = true } = {}) {
 }
 
 function setShortcutEditorField(field, value) {
+  if (field === 'url') {
+    shortcutIconSearchState = {
+      token: shortcutIconSearchState.token + 1,
+      status: 'idle',
+      candidates: [],
+      message: '',
+    };
+  }
   shortcutEditorState = createShortcutEditorState({
     ...shortcutEditorState,
     [field]: value,
@@ -931,13 +1226,115 @@ function setShortcutEditorIcon(input) {
   syncShortcutEditor();
 }
 
+function setShortcutEditorIconMask(nextMask) {
+  const iconMask = nextMask === 'rounded' ? 'rounded' : 'none';
+  shortcutEditorState = createShortcutEditorState({
+    ...shortcutEditorState,
+    iconMask,
+  });
+  syncShortcutEditor();
+}
+
+async function setShortcutEditorIconStyleField(field, value) {
+  if (field === 'iconSize') {
+    await saveGlobalShortcutIconStyle({ quickShortcutIconSize: value });
+    return;
+  }
+  await saveGlobalShortcutIconStyle({ quickShortcutIconRadius: value });
+}
+
 function setShortcutEditorSource(source) {
   const nextSource = ['site', 'glyph', 'image', 'svg'].includes(source) ? source : 'site';
+  if (nextSource !== 'image') {
+    shortcutIconSearchState = {
+      ...shortcutIconSearchState,
+      status: 'idle',
+      candidates: [],
+      message: '',
+    };
+  }
   shortcutEditorState = createShortcutEditorState({
     ...shortcutEditorState,
     iconKind: nextSource,
     icon: nextSource === shortcutEditorState.iconKind ? shortcutEditorState.icon : '',
   });
+  syncShortcutEditor();
+}
+
+function probeShortcutIconCandidate(candidate, timeout = SHORTCUT_ICON_SEARCH_TIMEOUT) {
+  return new Promise(resolve => {
+    const img = new Image();
+    let settled = false;
+    const finish = ok => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(ok ? candidate : null);
+    };
+    const timer = setTimeout(() => finish(false), timeout);
+    img.onload = () => finish(Boolean(img.naturalWidth || img.width));
+    img.onerror = () => finish(false);
+    img.referrerPolicy = 'no-referrer';
+    img.src = candidate.url;
+  });
+}
+
+async function getShortcutHtmlIconCandidates(input) {
+  const normalizedUrl = normalizeShortcutUrl(input);
+  if (!normalizedUrl || typeof fetch !== 'function') return [];
+  try {
+    const response = await fetch(normalizedUrl, {
+      credentials: 'omit',
+      redirect: 'follow',
+    });
+    if (!response.ok) return [];
+    const contentType = response.headers?.get?.('content-type') || '';
+    if (contentType && !/text\/html|application\/xhtml\+xml/i.test(contentType)) return [];
+    const html = await response.text();
+    return extractShortcutIconCandidatesFromHtml(html, response.url || normalizedUrl);
+  } catch {
+    return [];
+  }
+}
+
+async function searchShortcutWebsiteIcons() {
+  const hostname = getShortcutIconSearchHostname(shortcutEditorState.url);
+  if (!hostname) {
+    shortcutIconSearchState = {
+      ...shortcutIconSearchState,
+      status: 'error',
+      candidates: [],
+      message: themeT ? themeT('shortcutIconSearchNeedsUrl') : 'Enter a valid URL before searching icons.',
+    };
+    setShortcutEditorSource('image');
+    return;
+  }
+
+  const token = shortcutIconSearchState.token + 1;
+  shortcutIconSearchState = {
+    token,
+    status: 'loading',
+    candidates: [],
+    message: '',
+  };
+  setShortcutEditorSource('image');
+
+  const candidates = [
+    ...await getShortcutHtmlIconCandidates(shortcutEditorState.url),
+    ...createShortcutIconCandidates(shortcutEditorState.url),
+  ].filter((candidate, index, all) => (
+    candidate.url && all.findIndex(item => item.url === candidate.url) === index
+  ));
+  const settledCandidates = (await Promise.all(candidates.map(candidate => probeShortcutIconCandidate(candidate))))
+    .filter(Boolean);
+
+  if (shortcutIconSearchState.token !== token) return;
+  shortcutIconSearchState = {
+    token,
+    status: settledCandidates.length ? 'ready' : 'empty',
+    candidates: settledCandidates,
+    message: '',
+  };
   syncShortcutEditor();
 }
 
@@ -965,6 +1362,7 @@ async function saveShortcutEditorShortcut() {
     label: shortcutEditorState.label.trim(),
     icon: shortcutEditorState.icon,
     iconKind: shortcutEditorState.iconKind,
+    iconMask: shortcutEditorState.iconMask,
   };
 
   const nextShortcuts = shortcutEditorState.mode === 'edit'
@@ -993,6 +1391,7 @@ async function saveTabPickerUrlShortcut() {
     label: tabPickerManualDraft.label.trim(),
     icon: '',
     iconKind: 'site',
+    iconMask: 'none',
   };
 
   await saveQuickShortcuts([...shortcuts, nextShortcut]);
@@ -1223,6 +1622,8 @@ function renderQuickShortcutCard(shortcut) {
   const safeId = themeEscapeHtmlAttribute ? themeEscapeHtmlAttribute(shortcut.id) : shortcut.id.replace(/"/g, '&quot;');
   const safeUrl = themeEscapeHtmlAttribute ? themeEscapeHtmlAttribute(shortcut.url) : shortcut.url.replace(/"/g, '&quot;');
   const customIcon = normalizeShortcutIcon(shortcut.icon);
+  const iconMask = shortcut.iconMask === 'rounded' ? 'rounded' : 'none';
+  const iconStyle = getQuickShortcutIconStyleAttribute(themePreferences);
   const iconErrorFallback = (customIcon.kind === 'image' || customIcon.kind === 'svg') ? (faviconUrl || fallbackUrl) : fallbackUrl;
   const safeIconErrorFallback = themeEscapeHtmlAttribute ? themeEscapeHtmlAttribute(iconErrorFallback) : iconErrorFallback.replace(/"/g, '&quot;');
   const primaryIconUrl = customIcon.kind === 'image'
@@ -1233,12 +1634,15 @@ function renderQuickShortcutCard(shortcut) {
         ? ''
         : faviconUrl;
   const glyphIcon = customIcon.kind === 'glyph' ? customIcon.value : '';
+  const stretchClass = customIcon.kind === 'image' || customIcon.kind === 'svg'
+    ? ' quick-shortcut-icon-auto-stretch'
+    : '';
 
   return `
-    <div class="quick-shortcut-card" data-shortcut-id="${safeId}">
+    <div class="quick-shortcut-card${iconMask === 'rounded' ? ' has-rounded-icon-mask' : ''}" data-shortcut-id="${safeId}" style="${iconStyle}">
       <button class="quick-shortcut-open" type="button" data-action="open-quick-shortcut" data-shortcut-url="${safeUrl}" aria-label="${safeAriaLabel}" draggable="false">
         <span class="quick-shortcut-icon-wrap">
-          ${primaryIconUrl ? `<img class="quick-shortcut-icon${customIcon.kind === 'image' ? ' quick-shortcut-icon-custom' : ''}" src="${primaryIconUrl}" alt="" draggable="false" data-fallback-src="${safeIconErrorFallback}">` : ''}
+          ${primaryIconUrl ? `<img class="quick-shortcut-icon${customIcon.kind === 'image' ? ' quick-shortcut-icon-custom' : ''}${stretchClass}" src="${primaryIconUrl}" alt="" draggable="false" data-fallback-src="${safeIconErrorFallback}" data-auto-stretch-icon="true">` : ''}
           ${glyphIcon ? `<span class="quick-shortcut-custom-glyph" aria-hidden="true">${glyphIcon}</span>` : ''}
           <span class="quick-shortcut-fallback"${primaryIconUrl || glyphIcon ? ' style="display:none"' : ''}>${fallbackLabel}</span>
         </span>
@@ -1252,6 +1656,25 @@ function renderQuickShortcutCard(shortcut) {
       </button>
     </div>
   `;
+}
+
+function syncQuickShortcutAutoStretchImage(imgEl) {
+  if (!(imgEl instanceof HTMLImageElement)) return;
+  if (imgEl.dataset.autoStretchIcon !== 'true') return;
+  const card = imgEl.closest('.quick-shortcut-card');
+  if (!card?.classList.contains('has-rounded-icon-mask')) return;
+
+  const naturalMin = Math.min(imgEl.naturalWidth || 0, imgEl.naturalHeight || 0);
+  if (!naturalMin) return;
+  imgEl.classList.toggle('is-auto-stretched', naturalMin <= 48);
+}
+
+function syncQuickShortcutAutoStretchImages(root = document) {
+  root.querySelectorAll?.('.quick-shortcut-icon[data-auto-stretch-icon="true"]').forEach(img => {
+    if (img.complete) {
+      syncQuickShortcutAutoStretchImage(img);
+    }
+  });
 }
 
 function renderQuickShortcutAddCard() {
@@ -1275,6 +1698,7 @@ async function renderQuickShortcuts() {
 
   const shortcuts = await getQuickShortcuts();
   list.innerHTML = `${shortcuts.map(renderQuickShortcutCard).join('')}${renderQuickShortcutAddCard()}`;
+  syncQuickShortcutAutoStretchImages(list);
 }
 
 async function openShortcutEditorById(shortcutId, triggerEl = null) {
@@ -1784,6 +2208,27 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
+  if (action === 'search-shortcut-icons') {
+    e.preventDefault();
+    await searchShortcutWebsiteIcons();
+    return;
+  }
+
+  if (action === 'select-shortcut-icon-candidate') {
+    e.preventDefault();
+    const iconUrl = actionEl.dataset.iconUrl || '';
+    if (!iconUrl) return;
+    setShortcutEditorIcon(iconUrl);
+    showToast(themeT ? themeT('toastShortcutIconSelected') : 'Shortcut icon selected');
+    return;
+  }
+
+  if (action === 'set-shortcut-icon-mask') {
+    e.preventDefault();
+    setShortcutEditorIconMask(actionEl.dataset.mask || 'none');
+    return;
+  }
+
   if (action === 'paste-shortcut-icon') {
     e.preventDefault();
     const pasted = await tryShortcutEditorPasteViaExecCommand();
@@ -1799,6 +2244,10 @@ document.addEventListener('click', async (e) => {
     return;
   }
 });
+
+document.addEventListener('load', (e) => {
+  syncQuickShortcutAutoStretchImage(e.target);
+}, true);
 
 async function handleQuickShortcutMiddleOpen(shortcutButton, e) {
   if (!shortcutButton) return false;
@@ -1929,12 +2378,22 @@ document.addEventListener('input', (e) => {
       iconKind: normalized.kind || 'svg',
     });
     syncShortcutEditor();
+    return;
+  }
+
+  if (e.target.id === 'shortcutEditorIconSize') {
+    void setShortcutEditorIconStyleField('iconSize', e.target.value);
+    return;
+  }
+
+  if (e.target.id === 'shortcutEditorIconRadius') {
+    void setShortcutEditorIconStyleField('iconMaskRadius', e.target.value);
   }
 });
 
 document.addEventListener('compositionstart', (e) => {
   if (!(e.target instanceof HTMLElement)) return;
-  if (!['shortcutEditorUrl', 'shortcutEditorLabel', 'shortcutEditorEmoji', 'shortcutEditorSvgCode'].includes(e.target.id)) {
+  if (!['shortcutEditorUrl', 'shortcutEditorLabel', 'shortcutEditorEmoji', 'shortcutEditorSvgCode', 'shortcutEditorIconSize', 'shortcutEditorIconRadius'].includes(e.target.id)) {
     return;
   }
   e.target.dataset.composing = 'true';
@@ -2051,11 +2510,15 @@ function syncPopupTheme(targetDoc) {
   if (!root) return;
   const theme = getResolvedThemeDefinition(themePreferences);
   const opacityVars = computeThemeOpacityVars(themePreferences.surfaceOpacity);
+  const shortcutIconVars = computeQuickShortcutIconStyleVars(themePreferences);
 
   Object.entries(theme.vars).forEach(([name, value]) => {
     root.style.setProperty(name, value);
   });
   Object.entries(opacityVars).forEach(([name, value]) => {
+    root.style.setProperty(name, value);
+  });
+  Object.entries(shortcutIconVars).forEach(([name, value]) => {
     root.style.setProperty(name, value);
   });
   if (body) {
@@ -2078,6 +2541,15 @@ async function saveThemePreferences(nextPreferences) {
 
 globalThis.TabOutThemeControls = {
   filterRealTabs,
+  computeQuickShortcutIconStyleVars,
+  createShortcutIconCandidates,
+  extractShortcutIconCandidatesFromHtml,
+  getCodelifeFaviconUrl,
+  getQuickShortcutIconStyleAttribute,
+  getQuickShortcutIconStylePreferences,
+  getShortcutIconSearchHostname,
+  normalizeShortcutIconRadius,
+  normalizeShortcutIconSize,
   getResolvedThemeDefinition,
   getResolvedTone,
   getQuickShortcuts,

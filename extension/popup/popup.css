@@ -212,42 +212,67 @@ body.popup-shell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--card-bg) calc(var(--custom-surface-opacity, 14) + 24%), transparent);
+  border-radius: 0;
+  background: transparent;
   flex-shrink: 0;
 }
 
+.popup-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-wrap {
+  border-radius: var(--shortcut-icon-radius, 10px);
+  background: color-mix(in srgb, var(--card-bg) calc(var(--custom-surface-opacity, 14) + 78%), transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent-border) 18%, var(--warm-gray) 82%);
+  overflow: hidden;
+}
+
 .popup-shortcut-card .quick-shortcut-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: var(--shortcut-icon-size, 30px);
+  height: var(--shortcut-icon-size, 30px);
+  border-radius: 0;
   object-fit: cover;
+}
+
+.popup-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon {
+  border-radius: min(var(--shortcut-icon-radius, 10px), 8px);
 }
 
 .popup-shortcut-card .quick-shortcut-icon-custom {
   object-fit: contain;
 }
 
+.popup-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-custom.quick-shortcut-icon-auto-stretch,
+.popup-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-custom.is-auto-stretched,
+.popup-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-auto-stretch.is-auto-stretched {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.popup-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-custom.is-auto-stretched,
+.popup-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-auto-stretch.is-auto-stretched {
+  transform: scale(1.18);
+}
+
 .popup-shortcut-card .quick-shortcut-custom-glyph {
-  width: 22px;
-  height: 22px;
+  width: var(--shortcut-icon-size, 30px);
+  height: var(--shortcut-icon-size, 30px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 19px;
+  font-size: 26px;
   line-height: 1;
 }
 
 .popup-shortcut-card .quick-shortcut-fallback {
-  width: 22px;
-  height: 22px;
+  width: var(--shortcut-icon-size, 30px);
+  height: var(--shortcut-icon-size, 30px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   background: var(--workspace-accent-soft);
   color: var(--workspace-accent);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.05em;
 }

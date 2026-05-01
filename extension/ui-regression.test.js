@@ -283,10 +283,10 @@ test('theme menu styles and custom background layer are defined', () => {
   assert.match(css, /--workspace-chip-text:/);
   assert.match(css, /--workspace-chip-border:/);
   assert.match(css, /body\s*\{[\s\S]*background-image:\s*var\(--page-custom-background\)/);
-  assert.match(css, /\.header-title-row\s*\{[\s\S]*align-items:\s*center;[\s\S]*gap:\s*18px;[\s\S]*flex-wrap:\s*nowrap;/);
+  assert.match(css, /\.header-title-row\s*\{[\s\S]*--header-greeting-size:\s*40px;[\s\S]*align-items:\s*center;[\s\S]*gap:\s*18px;[\s\S]*flex-wrap:\s*nowrap;/);
   assert.match(css, /\.header-left h1\s*\{[\s\S]*margin-bottom:\s*0;[\s\S]*white-space:\s*nowrap;/);
   assert.match(css, /\.header-left h1\s*\{[\s\S]*line-height:\s*1;/);
-  assert.match(css, /\.header-left \.date\s*\{[\s\S]*font-size:\s*10px;[\s\S]*line-height:\s*1;[\s\S]*transform:\s*translateY\(1px\);/);
+  assert.match(css, /\.header-left \.date\s*\{[\s\S]*font-family:\s*'Test Tiempos Text', '方正FW筑紫A老明朝 简', serif;[\s\S]*font-size:\s*20px;[\s\S]*line-height:\s*1;[\s\S]*transform:\s*translateY\(1px\);/);
   assert.match(css, /\.header-theme-trigger\s*\{/);
   assert.match(css, /\.group-nav-tools\s*\{/);
   assert.match(css, /\.header-theme-trigger::after\s*\{/);
@@ -377,6 +377,22 @@ test('quick tabs area renders shortcut cards and add button hooks', () => {
   assert.match(css, /\.shortcut-editor-source-chip\[aria-pressed="true"\]\s*\{/);
   assert.match(css, /\.shortcut-editor-mode-group\[hidden\]\s*\{/);
   assert.match(css, /\.shortcut-editor-inline-field\s*\{/);
+  assert.match(html, /data-action="search-shortcut-icons"/);
+  assert.match(html, /id="shortcutEditorIconCandidates"/);
+  assert.match(html, /data-action="set-shortcut-icon-mask"/);
+  assert.match(html, /id="shortcutEditorIconSize"/);
+  assert.match(html, /id="shortcutEditorIconRadius"/);
+  assert.match(css, /\.shortcut-editor-icon-candidates\s*\{[\s\S]*display:\s*grid;/);
+  assert.match(css, /\.shortcut-editor-icon-candidate\s*\{/);
+  assert.match(css, /\.quick-shortcut-card\.has-rounded-icon-mask \.quick-shortcut-icon-wrap\s*\{/);
+  assert.match(css, /\.shortcut-editor-shape-options\s*\{[\s\S]*display:\s*grid;/);
+  assert.match(css, /\.shortcut-editor-range-row\s*\{/);
+  assert.match(themeJs, /createShortcutIconCandidates/);
+  assert.match(themeJs, /probeShortcutIconCandidate/);
+  assert.match(themeJs, /searchShortcutWebsiteIcons/);
+  assert.match(themeJs, /select-shortcut-icon-candidate/);
+  assert.match(themeJs, /setShortcutEditorIconMask/);
+  assert.match(themeJs, /iconMaskRadius/);
   assert.match(css, /\.quick-shortcut-remove\s*\{/);
   assert.match(css, /\.quick-shortcut-remove\s*\{[\s\S]*right:\s*0;[\s\S]*width:\s*18px;[\s\S]*height:\s*18px;/);
   assert.match(css, /\.quick-shortcut-remove:hover,[\s\S]*color:\s*color-mix\(in srgb, var\(--status-abandoned\) 92%, var\(--ink\) 8%\);/);
@@ -454,7 +470,7 @@ test('quick shortcuts support drag reordering with persisted order and drag prev
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
 
   assert.match(themeJs, /const\s*\{[\s\S]*reorderSubsetByIds:\s*themeReorderSubsetByIds,[\s\S]*\}\s*=\s*globalThis\.TabOutListOrder \|\| \{\};/);
-  assert.match(themeJs, /class="quick-shortcut-card" data-shortcut-id="\$\{safeId\}"/);
+  assert.match(themeJs, /class="quick-shortcut-card\$\{iconMask === 'rounded' \? ' has-rounded-icon-mask' : ''\}" data-shortcut-id="\$\{safeId\}"/);
   assert.match(themeJs, /const safeAriaLabel = themeEscapeHtmlAttribute \? themeEscapeHtmlAttribute\(label\) : label\.replace\(\/"\/g, '&quot;'\);/);
   assert.match(themeJs, /aria-label="\$\{safeAriaLabel\}"/);
   assert.match(themeJs, /let quickShortcutDragState = null;/);

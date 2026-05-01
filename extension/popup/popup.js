@@ -10,6 +10,14 @@ const popupI18n = globalThis.TabHarborI18n || {};
 const SESSION_GROUPS_KEY = 'sessionGroups';
 const GROUP_ORDER_KEY = 'groupOrder';
 const GROUP_TAB_ORDER_KEY = 'groupTabOrder';
+const SHORTCUT_ICON_DEFAULT_SIZE = 30;
+const SHORTCUT_ICON_MASK_SIZE = 36;
+const SHORTCUT_ICON_DEFAULT_RADIUS = 0;
+const SHORTCUT_ICON_MASK_RADIUS = 10;
+const SHORTCUT_ICON_MIN_SIZE = 24;
+const SHORTCUT_ICON_MAX_SIZE = 40;
+const SHORTCUT_ICON_MIN_RADIUS = 0;
+const SHORTCUT_ICON_MAX_RADIUS = 20;
 
 const popupState = {
   view: 'shortcuts',
@@ -78,6 +86,11 @@ function stripTitleNoise(title) {
   title = title.replace(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, '');
   title = title.replace(/\s+on X:\s*/, ': ');
   title = title.replace(/\s*\/\s*X\s*$/, '');
+  const noiseSepMatch = title.match(/\s+[\|\-\u2010-\u2015\u00b7]\s+/);
+  if (noiseSepMatch?.index > 0) {
+    title = title.slice(0, noiseSepMatch.index);
+  }
+  title = title.replace(/\s*[\|\-\u2010-\u2015\u00b7]\s*$/, '');
   return title.trim();
 }
 
@@ -161,18 +174,62 @@ function getTabHostname(tab) {
   }
 }
 
-function getTabLabel(tab) {
+function getTabLabel(tab = {}) {
+  const url = tab.url || '';
+  const hostname = getTabHostname(tab);
   const title = cleanTitle(
-    smartTitle(stripTitleNoise(tab.title || ''), tab.url || ''),
-    getTabHostname(tab)
+    smartTitle(stripTitleNoise(tab.title || ''), url),
+    hostname
   );
-  if (title) return title;
+  const titleLooksLikeUrl = title === url || /^[a-z][a-z0-9+.-]*:\/\//i.test(title);
+  if (title && !titleLooksLikeUrl) return title;
 
   try {
-    return friendlyDomain(new URL(tab.url).hostname) || tab.url;
+    const parsed = new URL(url);
+    return friendlyDomain(parsed.hostname || hostname) || url || 'Tab';
   } catch {
-    return tab.url || 'Tab';
+    return url || 'Tab';
   }
+}
+
+function clampPopupNumber(value, min, max, fallback) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(numericValue)));
+}
+
+function normalizePopupShortcutIconSize(value, iconMask = 'none') {
+  return clampPopupNumber(
+    value,
+    SHORTCUT_ICON_MIN_SIZE,
+    SHORTCUT_ICON_MAX_SIZE,
+    iconMask === 'rounded' ? SHORTCUT_ICON_MASK_SIZE : SHORTCUT_ICON_DEFAULT_SIZE
+  );
+}
+
+function normalizePopupShortcutIconRadius(value, iconMask = 'none') {
+  return clampPopupNumber(
+    value,
+    SHORTCUT_ICON_MIN_RADIUS,
+    SHORTCUT_ICON_MAX_RADIUS,
+    iconMask === 'rounded' ? SHORTCUT_ICON_MASK_RADIUS : SHORTCUT_ICON_DEFAULT_RADIUS
+  );
+}
+
+function getPopupShortcutIconStylePreferences() {
+  const getter = popupTheme.getQuickShortcutIconStylePreferences;
+  if (typeof getter === 'function') {
+    return getter();
+  }
+  return {
+    iconSize: normalizePopupShortcutIconSize(undefined, 'none'),
+    iconMaskRadius: normalizePopupShortcutIconRadius(undefined, 'rounded'),
+  };
+}
+
+function getPopupShortcutIconStyleAttribute() {
+  const style = getPopupShortcutIconStylePreferences();
+  return `--shortcut-icon-size:${style.iconSize}px;--shortcut-icon-radius:${style.iconMaskRadius}px;`;
 }
 
 const filterTabs = popupTheme.filterRealTabs || (tabs => Array.isArray(tabs) ? tabs : []);
@@ -351,16 +408,23 @@ function buildPopupTabGroups() {
 
   const groupMap = {};
   const landingTabs = [];
+  const groupedTabIds = new Set();
+  const markGrouped = tab => {
+    if (tab?.id !== undefined && tab?.id !== null) groupedTabIds.add(String(tab.id));
+  };
+  const isGrouped = tab => tab?.id !== undefined && tab?.id !== null && groupedTabIds.has(String(tab.id));
 
   for (const tab of openTabs) {
     const assignedGroupId = sessionGroups.assignments[String(tab.id)];
     if (assignedGroupId && sessionGroupMap[assignedGroupId]) {
       sessionGroupMap[assignedGroupId].tabs.push(tab);
+      markGrouped(tab);
       continue;
     }
 
     if (isLandingPage(tab.url)) {
       landingTabs.push(tab);
+      markGrouped(tab);
       continue;
     }
 
@@ -369,6 +433,7 @@ function buildPopupTabGroups() {
       const key = customRule.groupKey;
       if (!groupMap[key]) groupMap[key] = { domain: key, label: customRule.groupLabel, tabs: [], kind: 'custom' };
       groupMap[key].tabs.push(tab);
+      markGrouped(tab);
       continue;
     }
 
@@ -382,10 +447,27 @@ function buildPopupTabGroups() {
 
     if (!groupMap[hostname]) groupMap[hostname] = { domain: hostname, label: hostname, tabs: [], kind: 'domain' };
     groupMap[hostname].tabs.push(tab);
+    markGrouped(tab);
   }
 
   if (landingTabs.length > 0) {
     groupMap['__landing-pages__'] = { domain: '__landing-pages__', label: '__landing-pages__', tabs: landingTabs, kind: 'landing' };
+  }
+
+  for (const group of popupState.tabGroups || []) {
+    const tabs = Array.isArray(group?.tabs) ? group.tabs.filter(tab => !isGrouped(tab)) : [];
+    if (!tabs.length) continue;
+    const key = `__chrome_group__:${group.id}`;
+    groupMap[key] = {
+      domain: key,
+      label: group.title || 'Group',
+      tabs,
+      kind: 'chrome-group',
+      color: group.color || '',
+      collapsed: Boolean(group.collapsed),
+      chromeGroupId: group.id,
+    };
+    tabs.forEach(markGrouped);
   }
 
   const landingHostnames = new Set(getLandingPatterns().map(p => p.hostname).filter(Boolean));
@@ -424,6 +506,7 @@ function renderPopupShortcuts() {
   listEl.innerHTML = popupState.quickShortcuts.length
     ? popupState.quickShortcuts.map((s, i) => renderShortcutCard(s, i)).join('')
     : '';
+  syncPopupShortcutAutoStretchImages(listEl);
   emptyEl.hidden = popupState.quickShortcuts.length > 0;
 
   requestAnimationFrame(() => requestAnimationFrame(() => listEl.classList.add('is-ready')));
@@ -444,12 +527,17 @@ function renderShortcutCard(shortcut, index) {
         : (iconData.sources?.[0] || '');
   const glyph = iconKind === 'glyph' ? shortcut.icon : '';
   const fallbackLabel = popupIcons.getFallbackLabel ? popupIcons.getFallbackLabel(label, iconData.hostname) : label.slice(0, 1).toUpperCase();
+  const iconMask = shortcut.iconMask === 'rounded' ? 'rounded' : 'none';
+  const iconStyle = getPopupShortcutIconStyleAttribute();
+  const stretchClass = iconKind === 'image' || iconKind === 'svg'
+    ? ' quick-shortcut-icon-auto-stretch'
+    : '';
 
   return `
-    <div class="quick-shortcut-card popup-shortcut-card" style="--s:${index}">
+    <div class="quick-shortcut-card popup-shortcut-card${iconMask === 'rounded' ? ' has-rounded-icon-mask' : ''}" style="--s:${index};${iconStyle}">
       <button class="quick-shortcut-open" type="button" data-action="open-popup-url" data-url="${safeUrl}" aria-label="${safeLabel}">
         <span class="quick-shortcut-icon-wrap">
-          ${primaryIconUrl ? `<img class="quick-shortcut-icon${iconKind === 'image' ? ' quick-shortcut-icon-custom' : ''}" src="${primaryIconUrl}" alt="" draggable="false">` : ''}
+          ${primaryIconUrl ? `<img class="quick-shortcut-icon${iconKind === 'image' ? ' quick-shortcut-icon-custom' : ''}${stretchClass}" src="${primaryIconUrl}" alt="" draggable="false" data-auto-stretch-icon="true">` : ''}
           ${glyph ? `<span class="quick-shortcut-custom-glyph" aria-hidden="true">${glyph}</span>` : ''}
           <span class="quick-shortcut-fallback"${primaryIconUrl || glyph ? ' style="display:none"' : ''}>${fallbackLabel}</span>
         </span>
@@ -457,6 +545,25 @@ function renderShortcutCard(shortcut, index) {
       </button>
     </div>
   `;
+}
+
+function syncPopupShortcutAutoStretchImage(imgEl) {
+  if (!(imgEl instanceof HTMLImageElement)) return;
+  if (imgEl.dataset.autoStretchIcon !== 'true') return;
+  const card = imgEl.closest('.quick-shortcut-card');
+  if (!card?.classList.contains('has-rounded-icon-mask')) return;
+
+  const naturalMin = Math.min(imgEl.naturalWidth || 0, imgEl.naturalHeight || 0);
+  if (!naturalMin) return;
+  imgEl.classList.toggle('is-auto-stretched', naturalMin <= 48);
+}
+
+function syncPopupShortcutAutoStretchImages(root = document) {
+  root.querySelectorAll?.('.quick-shortcut-icon[data-auto-stretch-icon="true"]').forEach(img => {
+    if (img.complete) {
+      syncPopupShortcutAutoStretchImage(img);
+    }
+  });
 }
 
 function getGroupDisplayLabel(group) {
@@ -738,6 +845,9 @@ function registerPopupAutoRefresh() {
 
 function initializePopup() {
   document.addEventListener('error', handlePopupGroupNavImageError, true);
+  document.addEventListener('load', event => {
+    syncPopupShortcutAutoStretchImage(event.target);
+  }, true);
   registerPopupAutoRefresh();
 
   document.addEventListener('click', async e => {

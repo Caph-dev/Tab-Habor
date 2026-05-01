@@ -122,12 +122,12 @@
       aria-modal="false" aria-label="Saved items and todos" tabindex="-1">
       <div class="deferred-shell">
         <section class="drawer-panel is-active" id="savedPanel" role="tabpanel" aria-label="Saved for later"
-          tabindex="-1">
+          data-i18n-aria-label="savedForLater" tabindex="-1">
           <div class="section-header deferred-header">
             <div class="drawer-title-switch" role="tablist" aria-label="Drawer views">
               <button class="drawer-title-btn is-active" id="savedPanelTab" type="button" role="tab"
-                aria-selected="true" aria-controls="savedPanel" data-action="switch-drawer-view" data-view="saved">Saved
-                for later</button>
+                aria-selected="true" aria-controls="savedPanel" data-action="switch-drawer-view" data-view="saved"
+                data-i18n="savedForLater">Saved for later</button>
               <button class="drawer-title-btn" id="todoPanelTab" type="button" role="tab" aria-selected="false"
                 aria-controls="todoPanel" data-action="switch-drawer-view" data-view="todos">Todos</button>
             </div>
@@ -189,7 +189,7 @@
           <div class="section-header deferred-header todo-header">
             <div class="drawer-title-switch" role="tablist" aria-label="Drawer views">
               <button class="drawer-title-btn" type="button" role="tab" aria-selected="false" aria-controls="savedPanel"
-                data-action="switch-drawer-view" data-view="saved">Saved for later</button>
+                data-action="switch-drawer-view" data-view="saved" data-i18n="savedForLater">Saved for later</button>
               <button class="drawer-title-btn is-active" type="button" role="tab" aria-selected="true"
                 aria-controls="todoPanel" data-action="switch-drawer-view" data-view="todos">Todos</button>
             </div>
@@ -222,8 +222,9 @@
 
           <div class="todo-detail-view" id="todoDetailView" style="display:none"></div>
           <div class="todo-list" id="todoList"></div>
-          <div class="deferred-empty" id="todoEmpty" style="display:none">No tasks yet. Capture the next step when
-            something needs a follow-up.</div>
+          <div class="deferred-empty" id="todoEmpty" style="display:none" data-i18n="todoEmptyState">
+            No tasks yet. Capture the next step when something needs a follow-up.
+          </div>
 
           <div class="deferred-archive" id="todoArchive" style="display:none">
             <div class="archive-header-row">
@@ -348,8 +349,42 @@
           <div class="shortcut-editor-mode-group" id="shortcutEditorImageGroup">
             <div class="shortcut-editor-actions-row">
               <button class="theme-menu-action" type="button" data-action="upload-shortcut-icon">Upload image</button>
+              <button class="theme-menu-action is-secondary" type="button" data-action="search-shortcut-icons">Search website icons</button>
             </div>
             <div class="shortcut-editor-mode-note">Paste an image with Cmd/Ctrl+V while the editor is focused.</div>
+            <div class="shortcut-editor-icon-search-status" id="shortcutEditorIconSearchStatus" role="status"
+              aria-live="polite" hidden></div>
+            <div class="shortcut-editor-icon-candidates" id="shortcutEditorIconCandidates"></div>
+          </div>
+
+          <div class="shortcut-editor-style-group" id="shortcutEditorStyleGroup">
+            <div class="shortcut-editor-label">Icon shape</div>
+            <div class="shortcut-editor-shape-options" role="group" aria-label="Icon shape">
+              <button class="shortcut-editor-shape-option" type="button" data-action="set-shortcut-icon-mask"
+                data-mask="none" aria-pressed="true">
+                <span class="shortcut-editor-shape-demo">
+                  <span class="shortcut-editor-shape-icon">A</span>
+                </span>
+                <span>Default</span>
+              </button>
+              <button class="shortcut-editor-shape-option" type="button" data-action="set-shortcut-icon-mask"
+                data-mask="rounded" aria-pressed="false">
+                <span class="shortcut-editor-shape-demo is-rounded">
+                  <span class="shortcut-editor-shape-icon">A</span>
+                </span>
+                <span>Rounded</span>
+              </button>
+            </div>
+            <label class="shortcut-editor-range-row" for="shortcutEditorIconSize">
+              <span>Global icon size</span>
+              <input id="shortcutEditorIconSize" type="range" min="24" max="40" step="1" value="30">
+              <output id="shortcutEditorIconSizeValue" for="shortcutEditorIconSize">30 px</output>
+            </label>
+            <label class="shortcut-editor-range-row" for="shortcutEditorIconRadius">
+              <span>Global corner radius</span>
+              <input id="shortcutEditorIconRadius" type="range" min="0" max="20" step="1" value="0">
+              <output id="shortcutEditorIconRadiusValue" for="shortcutEditorIconRadius">0 px</output>
+            </label>
           </div>
 
           <label class="shortcut-editor-field shortcut-editor-mode-group" id="shortcutEditorSvgGroup">

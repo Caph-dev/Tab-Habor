@@ -31,6 +31,8 @@
   --custom-border-opacity: 14%;
   --custom-badge-opacity: 4%;
   --custom-fallback-opacity: 5%;
+  --shortcut-icon-size: 30px;
+  --shortcut-icon-radius: 10px;
   --floating-surface-opacity: clamp(82%, calc(var(--custom-surface-opacity) + 54%), 94%);
   --floating-border-opacity: clamp(30%, calc(var(--custom-border-opacity) + 18%), 64%);
   --panel-surface-opacity: 92%;
@@ -126,6 +128,7 @@ body.theme-tone-dark::before {
 }
 
 .header-title-row {
+  --header-greeting-size: 40px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -137,7 +140,7 @@ body.theme-tone-dark::before {
 .header-left h1 {
   font-family: 'Test Tiempos Text', '方正FW筑紫A老明朝 简', serif;
   font-weight: 400;
-  font-size: 40px;
+  font-size: var(--header-greeting-size);
   letter-spacing: -0.02em;
   color: var(--ink);
   margin-bottom: 0;
@@ -146,7 +149,8 @@ body.theme-tone-dark::before {
 }
 
 .header-left .date {
-  font-size: 10px;
+  font-family: 'Test Tiempos Text', '方正FW筑紫A老明朝 简', serif;
+  font-size: 20px;
   color: var(--muted);
   font-weight: 600;
   letter-spacing: 0.18em;
@@ -387,50 +391,83 @@ body.theme-tone-dark::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 0;
   border: none;
-  background: color-mix(in srgb, var(--card-bg) calc(var(--custom-surface-opacity) + 24%), transparent);
+  background: transparent;
   flex-shrink: 0;
-  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+  transition: color 0.16s ease;
+}
+
+.quick-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-wrap {
+  border-radius: var(--shortcut-icon-radius, 10px);
+  background: color-mix(in srgb, var(--card-bg) calc(var(--custom-surface-opacity) + 78%), transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent-border) 18%, var(--warm-gray) 82%);
+  overflow: hidden;
 }
 
 .quick-shortcut-open:hover .quick-shortcut-icon-wrap,
 .quick-shortcut-open:focus-visible .quick-shortcut-icon-wrap {
-  background: color-mix(in srgb, var(--card-bg) calc(var(--custom-surface-opacity) + 18%), var(--workspace-accent-soft) 14%);
-  box-shadow: 0 4px 10px color-mix(in srgb, var(--workspace-accent) 6%, transparent);
+  background: transparent;
+  box-shadow: none;
+}
+
+.quick-shortcut-card.has-rounded-icon-mask .quick-shortcut-open:hover .quick-shortcut-icon-wrap,
+.quick-shortcut-card.has-rounded-icon-mask .quick-shortcut-open:focus-visible .quick-shortcut-icon-wrap {
+  background: color-mix(in srgb, var(--card-bg) calc(var(--custom-surface-opacity) + 76%), var(--workspace-accent-soft) 10%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent-border) 26%, var(--warm-gray) 74%),
+    0 4px 10px color-mix(in srgb, var(--workspace-accent) 6%, transparent);
 }
 
 .quick-shortcut-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: var(--shortcut-icon-size, 30px);
+  height: var(--shortcut-icon-size, 30px);
+  border-radius: 0;
   object-fit: cover;
+}
+
+.quick-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon {
+  border-radius: min(var(--shortcut-icon-radius, 10px), 8px);
 }
 
 .quick-shortcut-icon-custom {
   object-fit: contain;
 }
 
+.quick-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-custom.quick-shortcut-icon-auto-stretch,
+.quick-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-custom.is-auto-stretched,
+.quick-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-auto-stretch.is-auto-stretched {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.quick-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-custom.is-auto-stretched,
+.quick-shortcut-card.has-rounded-icon-mask .quick-shortcut-icon-auto-stretch.is-auto-stretched {
+  transform: scale(1.18);
+}
+
 .quick-shortcut-custom-glyph {
-  width: 22px;
-  height: 22px;
+  width: var(--shortcut-icon-size, 30px);
+  height: var(--shortcut-icon-size, 30px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 19px;
+  font-size: 26px;
   line-height: 1;
 }
 
 .quick-shortcut-fallback {
-  width: 22px;
-  height: 22px;
+  width: var(--shortcut-icon-size, 30px);
+  height: var(--shortcut-icon-size, 30px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   background: var(--theme-accent-soft);
   color: var(--theme-accent-strong);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.05em;
 }
@@ -1130,6 +1167,10 @@ body.theme-tone-dark .deferred-shell {
   font-weight: 500;
   letter-spacing: 0.02em;
   white-space: nowrap;
+}
+
+.deferred-column .section-count {
+  font-family: 'Test Tiempos Text', '方正FW筑紫A老明朝 简', serif;
 }
 
 .group-nav {
@@ -2053,6 +2094,156 @@ body.group-dragging .group-nav-button {
   line-height: 1.45;
 }
 
+.shortcut-editor-style-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shortcut-editor-style-group[hidden] {
+  display: none !important;
+}
+
+.shortcut-editor-shape-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.shortcut-editor-shape-option {
+  min-height: 72px;
+  border: 1px solid color-mix(in srgb, var(--workspace-accent-border) 18%, var(--warm-gray) 82%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card-bg) calc(var(--custom-surface-opacity) + 70%), transparent);
+  color: var(--ink);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.shortcut-editor-shape-option:hover,
+.shortcut-editor-shape-option:focus-visible {
+  border-color: color-mix(in srgb, var(--workspace-accent-border) 38%, transparent);
+  background: color-mix(in srgb, var(--workspace-chip-bg) 52%, var(--card-bg) 48%);
+}
+
+.shortcut-editor-shape-option[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--workspace-accent-border) 54%, transparent);
+  background: color-mix(in srgb, var(--workspace-chip-bg) 80%, var(--card-bg) 20%);
+  color: var(--workspace-chip-text);
+}
+
+.shortcut-editor-shape-demo {
+  width: 34px;
+  height: 34px;
+  border-radius: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shortcut-editor-shape-demo.is-rounded {
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card-bg) 88%, var(--workspace-accent-soft) 12%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent-border) 24%, var(--warm-gray) 76%);
+}
+
+.shortcut-editor-shape-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 88%, var(--muted) 12%);
+  color: var(--card-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.shortcut-editor-range-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.shortcut-editor-range-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--workspace-chip-text);
+}
+
+.shortcut-editor-range-row output {
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.shortcut-editor-icon-search-status {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.shortcut-editor-icon-candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.shortcut-editor-icon-candidate {
+  min-height: 58px;
+  border: 1px solid color-mix(in srgb, var(--workspace-accent-border) 18%, var(--warm-gray) 82%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card-bg) calc(var(--custom-surface-opacity) + 70%), transparent);
+  color: var(--muted);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 5px;
+  font: inherit;
+  font-size: 9px;
+  line-height: 1.15;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.shortcut-editor-icon-candidate:hover,
+.shortcut-editor-icon-candidate:focus-visible {
+  border-color: color-mix(in srgb, var(--workspace-accent-border) 44%, transparent);
+  background: color-mix(in srgb, var(--workspace-chip-bg) 72%, var(--card-bg) 28%);
+  color: var(--workspace-chip-text);
+}
+
+.shortcut-editor-icon-candidate img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.shortcut-editor-icon-candidate span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .shortcut-editor-row {
   display: flex;
   align-items: center;
@@ -2092,6 +2283,11 @@ body.group-dragging .group-nav-button {
   flex-shrink: 0;
 }
 
+.shortcut-editor-preview.is-rounded-mask {
+  border-radius: var(--preview-icon-radius, 10px);
+  background: color-mix(in srgb, var(--card-bg) 88%, var(--workspace-accent-soft) 12%);
+}
+
 .shortcut-editor-field,
 .shortcut-editor-source-row,
 .shortcut-editor-mode-stage,
@@ -2100,14 +2296,23 @@ body.group-dragging .group-nav-button {
 }
 
 .shortcut-editor-preview img {
-  width: 22px;
-  height: 22px;
+  width: var(--preview-icon-size, 30px);
+  height: var(--preview-icon-size, 30px);
+  border-radius: min(var(--preview-icon-radius, 0px), 8px);
   object-fit: contain;
 }
 
+.shortcut-editor-preview.is-rounded-mask img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+  transform: scale(1.18);
+}
+
 .shortcut-editor-preview-fallback {
-  width: 22px;
-  height: 22px;
+  width: var(--preview-icon-size, 30px);
+  height: var(--preview-icon-size, 30px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2119,7 +2324,7 @@ body.group-dragging .group-nav-button {
 }
 
 .shortcut-editor-preview-glyph {
-  font-size: 20px;
+  font-size: min(calc(var(--preview-icon-size, 30px) * 0.86), 30px);
   line-height: 1;
 }
 
@@ -3045,6 +3250,7 @@ body.page-chip-list-dragging .chip-reorder-handle {
 
 /* ---- Empty state ---- */
 .deferred-empty {
+  font-family: 'Test Tiempos Text', '方正FW筑紫A老明朝 简', serif;
   font-size: 13px;
   color: var(--muted);
   font-style: italic;
