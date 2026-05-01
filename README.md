@@ -1,117 +1,69 @@
-# Tab Harbor
+# Tab Harbor Changes
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-**A calmer Chrome new tab dashboard for open tabs, quick links, saved reads, and lightweight todos.**
+This fork keeps the original Tab Harbor idea, but this README only records the changes made in this branch.
 
-Tab Harbor turns Chrome's new tab page into a place where you can keep working. You immediately see what is already open, which pages should be moved into read-later, and what still needs your attention.
+## What Changed
 
-<p align="center">
-  <img src="assets/readme/feature-tabs.png" alt="Tab Harbor overview" width="760">
-</p>
+### Shortcut icon editor
 
-## ✨ Core Highlights
+- Added icon mask controls for quick shortcuts.
+- Added global shortcut icon size and corner-radius sliders.
+- Added a website icon search action that looks for usable favicons, Apple touch icons, and fallback favicon services from the shortcut URL.
+- Improved custom image / SVG rendering so rounded icons fill the mask more cleanly.
+- Added middle-click support for quick shortcuts so a shortcut can open in a background tab.
 
-- **Tabs are automatically organized by domain.** Tab Harbor groups open pages by domain, and moves homepage-style tabs into a dedicated `Homepages` group, so you can quickly see what you are actually working on.
-- **You can still organize things around your own workflow.** When domain-based grouping is not enough, you can create manual groups, keep common quick links around, and jump back to the right section from the top icon rail.
-- **Read later and todos move into the drawer, separate from the main workspace, without needing another app.** You can search, restore, or archive them later instead of leaving everything hanging in the browser tab bar.
-- **It is not just a tab-cleaning tool.** Quick links, todos, open tabs, and saved reads all live in the same new tab page, so the next thing you need is usually right in front of you.
-- **It tries to make the workspace calmer without making the system heavier.** You can switch themes, tune transparency, set a custom background, and clean duplicate tabs with one click, while everything still stays in `chrome.storage.local` with no backend or account.
+### Visual direction
 
-## 🖼️ Feature Tour
+- Switched the editorial display typography from the remote Libre Caslon font to local editorial fonts:
+  - `Test Tiempos Text`
+  - `方正FW筑紫A老明朝 简`
+- Tuned the greeting, date, drawer counts, group titles, and footer typography to use the local editorial stack.
+- Reduced the default quick shortcut chrome so icons can read more like a quiet icon rail instead of small cards.
 
-<table>
-  <tr>
-    <td width="33.33%" valign="top">
-      <strong>Unified tab management</strong><br><br>
-      <img src="assets/readme/feature-tabs.png" alt="Tabs" width="100%">
-    </td>
-    <td width="33.33%" valign="top">
-      <strong>Saved reads</strong><br><br>
-      <img src="assets/readme/feature-saved-drawer.png" alt="Saved reads drawer" width="100%">
-    </td>
-    <td width="33.33%" valign="top">
-      <strong>Todos and quick jumping</strong><br><br>
-      <img src="assets/readme/feature-todos.png" alt="Todos" width="100%">
-    </td>
-  </tr>
-</table>
+### Drawer and dashboard details
 
-### Unified tab management
+- Adjusted the saved drawer width so it has more breathing room on wider screens.
+- Let todo text wrap to two lines instead of forcing single-line truncation.
+- Updated the duplicate Tab Harbor banner copy so it appears only when there are 3 or more Tab Harbor tabs open.
+- Added missing i18n hooks for saved-for-later and todo empty states.
 
-Tab Harbor organizes tabs more like a workspace: **domain-based groups, manual groups, quick access links, and fast jumping from the top icon rail**. If you want to clean up the browser a bit more, you can **also remove duplicate tabs with one click**.
+### Popup experience
 
-### Saved reads
+- Synced shortcut icon sizing and mask variables into the extension popup.
+- Updated popup rendering/tests for the shortcut icon mask behavior.
+- Kept popup styling aligned with the quieter shortcut icon treatment.
 
-Pages that are not for right now can be **moved into the side drawer, then searched, restored, or archived later**, instead of living forever in the browser tab bar.
+### Privacy page
 
-### Todos and quick jumping
+- Updated the privacy page typography to match the local editorial font stack.
 
-Tab Harbor also works as a tiny action layer: jot down todos, keep short descriptions, archive completed items, and jump back into the right group from the same page.
+## Current Diff Scope
 
-### Theme switching
+Compared with upstream `V-IOLE-T/tab-harbor@main`, this branch currently changes:
 
-When you want the page to feel more like your own workspace, you can **switch themes, tune transparency, and use a custom background image**.
+- `extension/theme-controls.js`
+- `extension/style.css`
+- `extension/index.html`
+- `extension/popup/popup.js`
+- `extension/popup/popup.css`
+- `extension/drawer-manager.js`
+- `extension/dashboard-runtime.js`
+- `extension/i18n.js`
+- shortcut, popup, theme, and UI regression tests
+- `privacy.html`
 
-<table>
-  <tr>
-    <td><img src="assets/readme/theme-warm-neutral.png" alt="warm neutral" width="100%"></td>
-    <td><img src="assets/readme/theme-soft-green.png" alt="soft green" width="100%"></td>
-  </tr>
-  <tr>
-    <td><img src="assets/readme/theme-soft-clay.png" alt="soft clay" width="100%"></td>
-    <td><img src="assets/readme/theme-custom-background.png" alt="custom background" width="100%"></td>
-  </tr>
-</table>
+## Validation
 
-## 🌊 Why It Feels Different
+Relevant validation command:
 
-Most new tab pages try to be a search box, a wallpaper, or a speed dial. Tab Harbor is closer to a lightweight browser control room. It keeps the messy reality of browsing visible, but turns it into something calmer and more actionable.
+```bash
+node --test extension/*.test.js extension/popup/*.test.js
+```
 
-That also means it is intentionally lightweight. There is no backend, no sync account, and no extra app to open. It lives exactly where the browsing chaos already happens.
+For script-loading or startup changes, also verify the extension in Chrome because this project uses ordered plain script tags rather than a bundler.
 
-## ⚡ Quick Use
+## Notes
 
-### Install with a coding agent
-
-1. Give your coding agent this repo:
-
-   ```text
-   https://github.com/V-IOLE-T/tab-harbor
-   ```
-
-2. Ask it to install the extension.
-3. Open a new tab in Chrome.
-
-### Install manually
-
-1. Clone this repo:
-
-   ```bash
-   git clone https://github.com/V-IOLE-T/tab-harbor.git
-   ```
-
-2. Open `chrome://extensions`
-3. Turn on **Developer mode**
-4. Click **Load unpacked**
-5. Select the [`extension/`](extension/) folder
-6. Open a new tab
-
-## 🔒 Fully Local
-
-Tab Harbor runs entirely inside the extension. Open tabs come directly from Chrome, and saved reads, todos, quick links, theme preferences, and layout state stay on your machine through `chrome.storage.local`.
-
-If you publish this repo for other people, they get the code and assets, not your personal browsing data.
-
-## 🛠️ Under the Hood
-
-This is a Manifest V3 Chrome extension with a plain frontend stack and no build step required to use it. You can clone it, load it, and start using it without npm, without a dev server, and without standing up anything else.
-
-## 🙏 Acknowledgements
-
-- Tab Harbor is built on top of Zara's open-source project [tab-out](https://github.com/zarazhangrui/tab-out), which is the upstream repository and the starting point for this project.
-- Thanks as well to the [Linux.do community](https://linux.do) for the ideas, feedback, and the kind of maker energy that helps projects like this keep evolving.
-
-## 📄 License
-
-MIT License
+The recent GitHub feedback noted that the plain HTML/CSS/JS structure is becoming harder to maintain. This branch does not convert the project to Vue or another framework; it keeps the current architecture and focuses on a narrower set of UI and interaction refinements.

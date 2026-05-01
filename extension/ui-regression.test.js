@@ -714,20 +714,63 @@ test('dashboard auto-refreshes when tabs change via background message', () => {
   assert.match(appJs, /chrome\.runtime\.onMessage\.addListener/);
   assert.match(appJs, /message\.action === 'tabs-changed'/);
   assert.match(appJs, /setTimeout[\s\S]*renderDashboard/);
+  assert.match(appJs, /renderDashboard\(\{\s*syncChromeGroups:\s*false,\s*animate:\s*false\s*\}\)/);
   assert.match(appJs, /__tabRefreshTimeout/);
+});
+
+test('optional quote loading does not block the main dashboard render', () => {
+  assert.match(runtimeJs, /function refreshHitokotoAfterPaint\(\)/);
+  assert.match(runtimeJs, /requestIdleCallback/);
+  assert.match(runtimeJs, /hitokotoDataCache/);
+  assert.match(runtimeJs, /hitokotoActiveFetchToken/);
+  assert.doesNotMatch(
+    runtimeJs,
+    /async function renderStaticDashboard[\s\S]*await fetchHitokoto\(\)/
+  );
+});
+
+test('automatic refresh paths skip repeat entrance animations and heavy group sync', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
+
+  assert.match(runtimeJs, /async function renderDashboard\(options = \{\}\)/);
+  assert.match(runtimeJs, /const shouldSyncChromeGroups = options\.syncChromeGroups !== false/);
+  assert.match(runtimeJs, /const shouldAnimate = options\.animate \?\? defaultAnimate/);
+  assert.match(runtimeJs, /document\.body\.classList\.toggle\('dashboard-refreshing', !animate\)/);
+  assert.match(css, /body\.dashboard-refreshing \.active-section \.missions \.mission-card/);
+});
+
+test('drawer search uses cached data and frame-coalesced rerendering', () => {
+  assert.match(drawerJs, /let savedTabsCache = null/);
+  assert.match(drawerJs, /let todosCache = null/);
+  assert.match(drawerJs, /let deferredTriggerPositionLoaded = false/);
+  assert.match(drawerJs, /function getCachedSavedTabs\(\)/);
+  assert.match(drawerJs, /function getCachedTodos\(\)/);
+  assert.match(drawerJs, /chrome\.storage\.onChanged\.addListener/);
+  assert.match(runtimeJs, /function scheduleDrawerSearchRender\(\)/);
+  assert.match(runtimeJs, /requestAnimationFrame\(\(\) => \{[\s\S]*renderDeferredColumn\(\)/);
+  assert.match(runtimeJs, /if \(e\.target\.id !== 'savedSearchInput'\) return;[\s\S]*scheduleDrawerSearchRender\(\);/);
+  assert.match(runtimeJs, /if \(e\.target\.id !== 'todoSearchInput'\) return;[\s\S]*scheduleDrawerSearchRender\(\);/);
+});
+
+test('drag previews skip DOM work when the insertion target has not changed', () => {
+  assert.match(runtimeJs, /pageChipDragState\.lastTargetId === nextTargetId/);
+  assert.match(runtimeJs, /drawerItemDragState\.lastTargetId === nextTargetId/);
+  assert.match(runtimeJs, /dragStartPoint\.lastTargetId === nextTargetId/);
+  assert.match(runtimeJs, /lastTargetId: draggedPageChipId/);
+  assert.match(runtimeJs, /lastTargetId: draggedDrawerItemId/);
 });
 
 test('closing duplicate Tab Harbor tabs rerenders without dropping chrome tab group mode', () => {
   assert.match(
     runtimeJs,
-    /if \(action === 'close-tabout-dupes'\) \{[\s\S]*__suppressAutoRefresh = true;[\s\S]*await closeTabOutDupes\(\);[\s\S]*await renderDashboard\(\);[\s\S]*updateBackToTopVisibility\(\);/
+    /if \(action === 'close-tabout-dupes'\) \{[\s\S]*__suppressAutoRefresh = true;[\s\S]*await closeTabOutDupes\(\);[\s\S]*await renderDashboard\(\{\s*animate:\s*false\s*\}\);[\s\S]*updateBackToTopVisibility\(\);/
   );
 });
 
 test('chrome tab group mode stays active while the toggle is on', () => {
   assert.match(
     runtimeJs,
-    /async function applyChromeTabGroupsToggle\(nextEnabled\) \{[\s\S]*chromeTabGroupsEnabled = enable;[\s\S]*if \(typeof setImportMode === 'function'\) setImportMode\(importedCount > 0\);[\s\S]*await renderDashboard\(\);/
+    /async function applyChromeTabGroupsToggle\(nextEnabled\) \{[\s\S]*chromeTabGroupsEnabled = enable;[\s\S]*if \(typeof setImportMode === 'function'\) setImportMode\(importedCount > 0\);[\s\S]*await renderDashboard\(\{\s*animate:\s*false\s*\}\);/
   );
   assert.doesNotMatch(
     runtimeJs,

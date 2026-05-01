@@ -15,6 +15,11 @@
 
 'use strict';
 
+const TAB_HARBOR_RUNTIME_DEBUG = false;
+const tabHarborRuntimeDebugLog = (...args) => {
+  if (TAB_HARBOR_RUNTIME_DEBUG) console.log(...args);
+};
+
 const {
   getLanguagePreference: runtimeGetLanguagePreference,
   setLanguagePreference: runtimeSetLanguagePreference,
@@ -249,6 +254,12 @@ let draggedPageChipEl = null;
 let pageChipDragState = null;
 let pageChipPlaceholderEl = null;
 let chromeTabGroupsEnabled = false;
+let dashboardHasRenderedOnce = false;
+let hitokotoRequestToken = 0;
+let hitokotoActiveFetchToken = 0;
+let hitokotoDataCache = null;
+let hitokotoFetchInFlight = false;
+let drawerSearchRenderFrame = 0;
 let importedChromeGroupMeta = normalizeChromeImportedGroupMeta
   ? normalizeChromeImportedGroupMeta(runtimeEmptyChromeImportedMeta)
   : { entries: [] };
@@ -416,6 +427,70 @@ async function fetchHitokoto(timeoutMs = 3000) {
   }
 }
 
+function clearHitokotoDisplay() {
+  const hitokotoEl = document.getElementById('hitokoto');
+  const hitokotoTextEl = document.getElementById('hitokotoText');
+  const hitokotoFromEl = document.getElementById('hitokotoFrom');
+  if (hitokotoEl) hitokotoEl.style.display = 'none';
+  if (hitokotoTextEl) hitokotoTextEl.textContent = '';
+  if (hitokotoFromEl) hitokotoFromEl.textContent = '';
+}
+
+function applyHitokotoData(data) {
+  const hitokotoEl = document.getElementById('hitokoto');
+  const hitokotoTextEl = document.getElementById('hitokotoText');
+  const hitokotoFromEl = document.getElementById('hitokotoFrom');
+  if (!data || !hitokotoEl || !hitokotoTextEl || !hitokotoFromEl) return;
+
+  hitokotoTextEl.textContent = data.hitokoto || '';
+  const from = [data.from_who, data.from].filter(Boolean).join(' · ');
+  hitokotoFromEl.textContent = from ? ` — ${from}` : '';
+  hitokotoEl.style.display = data.hitokoto ? '' : 'none';
+}
+
+function refreshHitokotoAfterPaint() {
+  const hitokotoEnabled = typeof themePreferences !== 'undefined' ? themePreferences.hitokotoEnabled : true;
+
+  if (!hitokotoEnabled) {
+    hitokotoRequestToken++;
+    hitokotoActiveFetchToken = 0;
+    clearHitokotoDisplay();
+    return;
+  }
+
+  if (hitokotoDataCache) {
+    applyHitokotoData(hitokotoDataCache);
+    return;
+  }
+
+  if (hitokotoFetchInFlight && hitokotoActiveFetchToken === hitokotoRequestToken) return;
+  const token = ++hitokotoRequestToken;
+  hitokotoActiveFetchToken = token;
+  hitokotoFetchInFlight = true;
+
+  const schedule = window.requestIdleCallback
+    ? callback => window.requestIdleCallback(callback, { timeout: 1200 })
+    : callback => setTimeout(callback, 0);
+
+  schedule(() => {
+    fetchHitokoto()
+      .then(data => {
+        if (!data || token !== hitokotoRequestToken) return;
+        hitokotoDataCache = data;
+        applyHitokotoData(data);
+      })
+      .catch(() => {
+        // Silently fail — hitokoto is a nice-to-have, not critical.
+      })
+      .finally(() => {
+        if (hitokotoActiveFetchToken === token) {
+          hitokotoActiveFetchToken = 0;
+          hitokotoFetchInFlight = false;
+        }
+      });
+  });
+}
+
 async function fetchOpenTabs() {
   try {
     const extensionId = chrome.runtime.id;
@@ -573,7 +648,7 @@ function scheduleChromeTabGroupsImport() {
       await loadImportedChromeGroupMeta();
       const importedCount = await importChromeNativeGroupsIntoSessionGroups();
       if (typeof setImportMode === 'function') setImportMode(importedCount > 0);
-      await renderDashboard();
+      await renderDashboard({ animate: false });
     } finally {
       chromeTabGroupsImportInFlight = false;
     }
@@ -605,7 +680,7 @@ async function applyChromeTabGroupsToggle(nextEnabled) {
 
   ensureChromeTabGroupsSubscription();
   if (typeof setImportMode === 'function') setImportMode(importedCount > 0);
-  await renderDashboard();
+  await renderDashboard({ animate: false });
   showToast(enable
     ? (runtimeT ? runtimeT('toastChromeTabGroupsOn') : 'Chrome tab groups on')
     : (runtimeT ? runtimeT('toastChromeTabGroupsOff') : 'Chrome tab groups off'));
@@ -658,6 +733,8 @@ function updateGroupNavButtonIcon(groupKey) {
 }
 
 function animatePageChipItems(listEl, previousRects) {
+  if (prefersReducedMotion()) return;
+
   listEl?.querySelectorAll('[data-chip-sort-id]').forEach(item => {
     if (item.classList.contains('is-dragging')) return;
 
@@ -767,6 +844,8 @@ function clearGroupDragState() {
 }
 
 function animateDrawerListItems(listEl, previousRects) {
+  if (prefersReducedMotion()) return;
+
   listEl?.querySelectorAll('[data-drawer-sort-id]').forEach(item => {
     if (item.classList.contains('is-dragging')) return;
 
@@ -854,12 +933,7 @@ function previewPageChipOrder(clientY) {
   if (!listEl || !draggedPageChipId) return;
 
   const placeholder = ensurePageChipPlaceholder();
-  const previousRects = new Map();
   const items = [...listEl.querySelectorAll('[data-chip-sort-id]:not(.is-dragging)')];
-
-  items.forEach(item => {
-    previousRects.set(item.dataset.chipSortId || '', item.getBoundingClientRect());
-  });
 
   let insertBeforeItem = null;
   for (const item of items) {
@@ -869,6 +943,15 @@ function previewPageChipOrder(clientY) {
       break;
     }
   }
+
+  const nextTargetId = insertBeforeItem?.dataset.chipSortId || '__end__';
+  if (pageChipDragState.lastTargetId === nextTargetId) return;
+  pageChipDragState.lastTargetId = nextTargetId;
+
+  const previousRects = new Map();
+  items.forEach(item => {
+    previousRects.set(item.dataset.chipSortId || '', item.getBoundingClientRect());
+  });
 
   if (insertBeforeItem) {
     listEl.insertBefore(placeholder, insertBeforeItem);
@@ -900,12 +983,7 @@ function previewDrawerItemOrder(clientY) {
   if (!listEl || !draggedDrawerItemId) return;
 
   const placeholder = ensureDrawerItemPlaceholder();
-  const previousRects = new Map();
   const items = [...listEl.querySelectorAll('[data-drawer-sort-id]:not(.is-dragging)')];
-
-  items.forEach(item => {
-    previousRects.set(item.dataset.drawerSortId || '', item.getBoundingClientRect());
-  });
 
   let insertBeforeItem = null;
   for (const item of items) {
@@ -915,6 +993,15 @@ function previewDrawerItemOrder(clientY) {
       break;
     }
   }
+
+  const nextTargetId = insertBeforeItem?.dataset.drawerSortId || '__end__';
+  if (drawerItemDragState.lastTargetId === nextTargetId) return;
+  drawerItemDragState.lastTargetId = nextTargetId;
+
+  const previousRects = new Map();
+  items.forEach(item => {
+    previousRects.set(item.dataset.drawerSortId || '', item.getBoundingClientRect());
+  });
 
   if (insertBeforeItem) {
     listEl.insertBefore(placeholder, insertBeforeItem);
@@ -933,6 +1020,7 @@ async function reorderSavedTabs(orderIds) {
     item => item && item.id && !item.completed && !item.dismissed
   );
   await chrome.storage.local.set({ deferred: nextDeferred });
+  if (typeof setSavedTabsCache === 'function') setSavedTabsCache(nextDeferred);
   return nextDeferred;
 }
 
@@ -965,6 +1053,14 @@ function updateDraggedButtonPosition(clientX, clientY) {
   draggedGroupButtonEl.style.setProperty('--drag-top', `${clientY - dragStartPoint.offsetY}px`);
 }
 
+function scheduleDrawerSearchRender() {
+  if (drawerSearchRenderFrame) cancelAnimationFrame(drawerSearchRenderFrame);
+  drawerSearchRenderFrame = requestAnimationFrame(() => {
+    drawerSearchRenderFrame = 0;
+    void renderDeferredColumn();
+  });
+}
+
 function ensureDragPlaceholder() {
   if (dragPlaceholderEl || !draggedGroupButtonEl) return dragPlaceholderEl;
 
@@ -989,6 +1085,10 @@ function previewDraggedOrder(clientX) {
       break;
     }
   }
+
+  const nextTargetId = insertBeforeButton?.dataset.groupId || '__end__';
+  if (dragStartPoint.lastTargetId === nextTargetId) return;
+  dragStartPoint.lastTargetId = nextTargetId;
 
   if (insertBeforeButton) {
     navListEl.insertBefore(placeholder, insertBeforeButton);
@@ -1619,7 +1719,10 @@ function renderGroupNavArea(groups) {
  * 5. Updates footer stats
  * 6. Renders the "Saved for Later" checklist
  */
-async function renderStaticDashboard() {
+async function renderStaticDashboard(options = {}) {
+  const animate = options.animate !== false;
+  document.body.classList.toggle('dashboard-refreshing', !animate);
+
   // --- Header ---
   const greetingEl = document.getElementById('greeting');
   const dateEl     = document.getElementById('dateDisplay');
@@ -1628,24 +1731,8 @@ async function renderStaticDashboard() {
 
   // --- Hitokoto (一言) ---
   const hitokotoEnabled = typeof themePreferences !== 'undefined' ? themePreferences.hitokotoEnabled : true;
-  const hitokotoEl     = document.getElementById('hitokoto');
-  const hitokotoTextEl = document.getElementById('hitokotoText');
-  const hitokotoFromEl = document.getElementById('hitokotoFrom');
-  if (hitokotoEnabled && hitokotoEl && hitokotoTextEl && hitokotoFromEl) {
-    try {
-      const data = await fetchHitokoto();
-      if (data) {
-        hitokotoTextEl.textContent = data.hitokoto;
-        const from = [data.from_who, data.from].filter(Boolean).join(' · ');
-        hitokotoFromEl.textContent = from ? ` — ${from}` : '';
-        hitokotoEl.style.display = '';
-      }
-    } catch (_e) {
-      // Silently fail — hitokoto is a nice-to-have, not critical
-    }
-  } else if (hitokotoEl) {
-    hitokotoEl.style.display = 'none';
-  }
+  if (hitokotoEnabled) refreshHitokotoAfterPaint();
+  else clearHitokotoDisplay();
 
   renderThemeMenu();
   await renderQuickShortcuts();
@@ -1847,9 +1934,15 @@ async function renderStaticDashboard() {
   setupImageErrorHandlers();
 }
 
-async function renderDashboard() {
-  await renderStaticDashboard();
-  if (typeof syncChromeTabGroups === 'function') {
+async function renderDashboard(options = {}) {
+  const defaultAnimate = !dashboardHasRenderedOnce;
+  const shouldAnimate = options.animate ?? defaultAnimate;
+  const shouldSyncChromeGroups = options.syncChromeGroups !== false;
+
+  await renderStaticDashboard({ ...options, animate: shouldAnimate });
+  dashboardHasRenderedOnce = true;
+
+  if (shouldSyncChromeGroups && typeof syncChromeTabGroups === 'function') {
     await syncChromeTabGroups(getChromeSyncGroups(domainGroups));
   }
 }
@@ -1959,7 +2052,7 @@ document.addEventListener('click', async (e) => {
     window.__suppressAutoRefresh = true;
     
     await closeTabOutDupes();
-    await renderDashboard();
+    await renderDashboard({ animate: false });
     updateBackToTopVisibility();
     playCloseSound();
     const banner = document.getElementById('tabOutDupeBanner');
@@ -1975,22 +2068,8 @@ document.addEventListener('click', async (e) => {
   if (action === 'toggle-hitokoto') {
     const nextEnabled = !(typeof themePreferences !== 'undefined' && themePreferences.hitokotoEnabled);
     await saveThemePreferences({ hitokotoEnabled: nextEnabled });
-    const hitokotoEl = document.getElementById('hitokoto');
-    const hitokotoTextEl = document.getElementById('hitokotoText');
-    const hitokotoFromEl = document.getElementById('hitokotoFrom');
-    if (hitokotoEl) hitokotoEl.style.display = nextEnabled ? '' : 'none';
-    if (nextEnabled && hitokotoTextEl && hitokotoFromEl) {
-      // Re-fetch hitokoto when turning back on (with timeout)
-      fetchHitokoto().then(data => {
-        if (!data) return;
-        hitokotoTextEl.textContent = data.hitokoto;
-        const from = [data.from_who, data.from].filter(Boolean).join(' · ');
-        hitokotoFromEl.textContent = from ? ` — ${from}` : '';
-      }).catch(() => { /* silently fail */ });
-    } else if (!nextEnabled && hitokotoTextEl && hitokotoFromEl) {
-      hitokotoTextEl.textContent = '';
-      hitokotoFromEl.textContent = '';
-    }
+    if (nextEnabled) refreshHitokotoAfterPaint();
+    else clearHitokotoDisplay();
     // Sync toggle switch visual state (renderThemeMenu does not know about this switch)
     const toggleSwitch = document.querySelector('[data-action="toggle-hitokoto"]');
     if (toggleSwitch) {
@@ -2027,7 +2106,7 @@ document.addEventListener('click', async (e) => {
     const nextState = assignTabToSessionGroup(sessionGroupsState, tabId, groupId);
     await saveSessionGroups(nextState);
     closeMoveMenus();
-    await renderDashboard();
+    await renderDashboard({ animate: false });
     showToast(runtimeT ? runtimeT('toastMovedTo', { name: group.name }) : `Moved to ${group.name}`);
     return;
   }
@@ -2049,7 +2128,7 @@ document.addEventListener('click', async (e) => {
       const nextState = assignTabToSessionGroup(created.state, tabId, created.group.id);
       await saveSessionGroups(nextState);
       closeMoveMenus();
-      await renderDashboard();
+      await renderDashboard({ animate: false });
       showToast(runtimeT ? runtimeT('toastCreatedGroup', { name: created.group.name }) : `Created ${created.group.name}`);
     } catch (err) {
       showToast(err.message || (runtimeT ? runtimeT('toastCouldNotCreateGroup') : 'Could not create group'));
@@ -2069,7 +2148,7 @@ document.addEventListener('click', async (e) => {
     );
     await saveSessionGroups(nextState);
     closeMoveMenus();
-    await renderDashboard();
+    await renderDashboard({ animate: false });
     showToast(runtimeT ? runtimeT('toastMovedBackToOriginalGroup') : 'Moved back to original group');
     return;
   }
@@ -2100,7 +2179,7 @@ document.addEventListener('click', async (e) => {
       domainGroups.map(group => group.domain)
     );
     await saveGroupOrder(nextState);
-    await renderDashboard();
+    await renderDashboard({ animate: false });
     showToast(nextState.pinEnabled
       ? (runtimeT ? runtimeT('toastPinnedOrder') : 'Pinned current order')
       : (runtimeT ? runtimeT('toastPinOrderOff') : 'Pin order turned off'));
@@ -2279,7 +2358,7 @@ document.addEventListener('click', async (e) => {
     if (!restored?.url) return;
 
     await reopenSavedTab(restored.url);
-    await renderDashboard();
+    await renderDashboard({ animate: false });
 
     const item = actionEl.closest('.deferred-item');
     if (item) {
@@ -2628,6 +2707,7 @@ document.addEventListener('pointerdown', (e) => {
       offsetX: e.clientX - rect.left,
       offsetY: e.clientY - rect.top,
       moved: false,
+      lastTargetId: draggedPageChipId,
     };
     return;
   }
@@ -2653,6 +2733,7 @@ document.addEventListener('pointerdown', (e) => {
     offsetX: e.clientX - rect.left,
     offsetY: e.clientY - rect.top,
     moved: false,
+    lastTargetId: draggedDrawerItemId,
   };
 });
 
@@ -2793,7 +2874,7 @@ document.addEventListener('pointerup', async () => {
   clearGroupDragState();
 
   if (moved) {
-    await renderDashboard();
+    await renderDashboard({ animate: false });
   }
 });
 
@@ -2842,13 +2923,13 @@ document.addEventListener('input', async (e) => {
 
   if (e.target.id !== 'savedSearchInput') return;
   savedSearchQuery = e.target.value.trim();
-  await renderDeferredColumn();
+  scheduleDrawerSearchRender();
 });
 
-document.addEventListener('input', async (e) => {
+document.addEventListener('input', (e) => {
   if (e.target.id !== 'todoSearchInput') return;
   todoSearchQuery = e.target.value.trim();
-  await renderDeferredColumn();
+  scheduleDrawerSearchRender();
 });
 
 document.addEventListener('change', async (e) => {
@@ -3022,21 +3103,21 @@ async function initializeDashboardRuntime() {
  * and refreshes the dashboard to show updated tab list.
  */
 function setupTabChangeListener() {
-  console.log('[tab-harbor] Setting up tab change listener');
+  tabHarborRuntimeDebugLog('[tab-harbor] Setting up tab change listener');
   
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('[tab-harbor] Received message:', message);
+    tabHarborRuntimeDebugLog('[tab-harbor] Received message:', message);
     
     if (message.action === 'tabs-changed') {
       // Skip refresh if we just performed a tab action ourselves
       // This prevents animation spam when closing tabs from the dashboard
       if (window.__suppressAutoRefresh) {
-        console.log('[tab-harbor] Auto-refresh suppressed (recent user action)');
+        tabHarborRuntimeDebugLog('[tab-harbor] Auto-refresh suppressed (recent user action)');
         window.__suppressAutoRefresh = false;
         return;
       }
       
-      console.log('[tab-harbor] Tab changed, scheduling refresh...');
+      tabHarborRuntimeDebugLog('[tab-harbor] Tab changed, scheduling refresh...');
       
       // Debounce rapid changes (e.g., closing multiple tabs)
       if (window.__tabRefreshTimeout) {
@@ -3045,10 +3126,10 @@ function setupTabChangeListener() {
       
       window.__tabRefreshTimeout = setTimeout(async () => {
         try {
-          console.log('[tab-harbor] Refreshing dashboard...');
-          await renderDashboard();
+          tabHarborRuntimeDebugLog('[tab-harbor] Refreshing dashboard...');
+          await renderDashboard({ syncChromeGroups: false, animate: false });
           updateBackToTopVisibility();
-          console.log('[tab-harbor] Dashboard refreshed successfully');
+          tabHarborRuntimeDebugLog('[tab-harbor] Dashboard refreshed successfully');
         } catch (err) {
           console.warn('[tab-harbor] Failed to refresh dashboard:', err);
         }

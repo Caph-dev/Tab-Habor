@@ -39,6 +39,21 @@ let savedSearchOpen = false;
 let savedSearchQuery = '';
 let drawerFocusReturnEl = null;
 const TODOS_KEY = 'todos';
+let savedTabsCache = null;
+let todosCache = null;
+let deferredTriggerPositionLoaded = false;
+
+if (globalThis.chrome?.storage?.onChanged?.addListener) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') return;
+    if (Object.prototype.hasOwnProperty.call(changes, 'deferred')) {
+      setSavedTabsCache(changes.deferred?.newValue || []);
+    }
+    if (Object.prototype.hasOwnProperty.call(changes, TODOS_KEY)) {
+      setTodosCache(changes[TODOS_KEY]?.newValue || []);
+    }
+  });
+}
 
 const DRAWER_LABEL_FALLBACKS = {
   openSavedForLater: 'Open saved for later',
@@ -54,14 +69,52 @@ function drawerSavedItemsCount(count) {
   return drawerT ? drawerT(key, { count }) : `${count} item${count !== 1 ? 's' : ''}`;
 }
 
+function splitSavedTabs(deferred = []) {
+  const visible = deferred.filter(t => !t.dismissed);
+  return {
+    raw: deferred,
+    active: visible.filter(t => !t.completed),
+    archived: visible.filter(t => t.completed),
+  };
+}
+
+function setSavedTabsCache(deferred = []) {
+  savedTabsCache = splitSavedTabs(Array.isArray(deferred) ? deferred : []);
+  return savedTabsCache;
+}
+
+function invalidateSavedTabsCache() {
+  savedTabsCache = null;
+}
+
+function setTodosCache(todos = []) {
+  todosCache = drawerNormalizeTodos(todos);
+  return todosCache;
+}
+
+function invalidateTodosCache() {
+  todosCache = null;
+}
+
+function getCachedSavedTabs() {
+  return savedTabsCache;
+}
+
+function getCachedTodos() {
+  return todosCache;
+}
+
 async function loadDeferredTriggerPosition() {
+  if (deferredTriggerPositionLoaded) return deferredTriggerPosition;
   const stored = await chrome.storage.local.get(DEFERRED_TRIGGER_POSITION_KEY);
   deferredTriggerPosition = drawerNormalizeTriggerPosition(stored[DEFERRED_TRIGGER_POSITION_KEY]);
+  deferredTriggerPositionLoaded = true;
   return deferredTriggerPosition;
 }
 
 async function saveDeferredTriggerPosition(nextState) {
   deferredTriggerPosition = drawerNormalizeTriggerPosition(nextState);
+  deferredTriggerPositionLoaded = true;
   await chrome.storage.local.set({ [DEFERRED_TRIGGER_POSITION_KEY]: deferredTriggerPosition });
   return deferredTriggerPosition;
 }
@@ -100,15 +153,13 @@ async function saveTabForLater(tab) {
     dismissed: false,
   });
   await chrome.storage.local.set({ deferred });
+  setSavedTabsCache(deferred);
 }
 
 async function getSavedTabs() {
+  if (savedTabsCache) return savedTabsCache;
   const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const visible = deferred.filter(t => !t.dismissed);
-  return {
-    active: visible.filter(t => !t.completed),
-    archived: visible.filter(t => t.completed),
-  };
+  return setSavedTabsCache(deferred);
 }
 
 async function checkOffSavedTab(id) {
@@ -118,6 +169,7 @@ async function checkOffSavedTab(id) {
     tab.completed = true;
     tab.completedAt = new Date().toISOString();
     await chrome.storage.local.set({ deferred });
+    setSavedTabsCache(deferred);
   }
 }
 
@@ -127,6 +179,7 @@ async function dismissSavedTab(id) {
   if (tab) {
     tab.dismissed = true;
     await chrome.storage.local.set({ deferred });
+    setSavedTabsCache(deferred);
   }
 }
 
@@ -136,6 +189,7 @@ async function restoreSavedTab(id) {
   if (tab) {
     tab.dismissed = true;
     await chrome.storage.local.set({ deferred });
+    setSavedTabsCache(deferred);
     return { url: tab.url, title: tab.title };
   }
   return null;
@@ -147,6 +201,7 @@ async function deleteArchivedTab(id) {
   if (tab) {
     tab.dismissed = true;
     await chrome.storage.local.set({ deferred });
+    setSavedTabsCache(deferred);
   }
 }
 
@@ -159,17 +214,19 @@ async function clearArchivedTabs() {
     return tab;
   });
   await chrome.storage.local.set({ deferred: nextDeferred });
+  setSavedTabsCache(nextDeferred);
 }
 
 async function getTodos() {
+  if (todosCache) return todosCache;
   const stored = await chrome.storage.local.get(TODOS_KEY);
-  return drawerNormalizeTodos(stored[TODOS_KEY]);
+  return setTodosCache(stored[TODOS_KEY]);
 }
 
 async function saveTodos(todos) {
   const normalized = drawerNormalizeTodos(todos);
   await chrome.storage.local.set({ [TODOS_KEY]: normalized });
-  return normalized;
+  return setTodosCache(normalized);
 }
 
 async function createTodoItem(payload) {
@@ -259,7 +316,7 @@ async function renderTodoPanel() {
 
   if (!panel) return;
 
-  const todos = await getTodos();
+  const todos = getCachedTodos() || await getTodos();
   const { active, archived } = drawerSplitTodos(todos);
   const filtered = drawerSearchTodos(active, todoSearchQuery);
   const todoDragEnabled = !todoSearchQuery.trim() && !todoDetailId;
@@ -353,8 +410,8 @@ async function renderDeferredColumn() {
   if (!column) return;
 
   try {
-    const { active, archived } = await getSavedTabs();
-    await getTodos();
+    const { active, archived } = getCachedSavedTabs() || await getSavedTabs();
+    if (!getCachedTodos()) await getTodos();
     await loadDeferredTriggerPosition();
     column.style.display = 'block';
     if (triggerStack) triggerStack.style.display = 'flex';

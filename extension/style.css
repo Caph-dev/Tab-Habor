@@ -1083,7 +1083,7 @@ body.theme-tone-dark .deferred-shell {
   background: var(--banner-action-bg);
   color: var(--banner-action-text);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, transform 0.2s;
   white-space: nowrap;
   min-height: 36px;
 }
@@ -1366,6 +1366,8 @@ body.group-dragging .group-nav-button {
   flex-direction: column;
   gap: 12px;
   margin-bottom: 32px;
+  content-visibility: auto;
+  contain-intrinsic-size: 720px;
 }
 
 .mission-card {
@@ -1380,6 +1382,7 @@ body.group-dragging .group-nav-button {
   cursor: pointer;
   position: relative;
   overflow: visible;
+  contain: layout style;
   break-inside: avoid;
   margin-bottom: 0;
   box-shadow: 0 14px 28px color-mix(in srgb, var(--workspace-accent) 6%, transparent);
@@ -1517,7 +1520,7 @@ body.group-dragging .group-nav-button {
   display: flex;
   flex-direction: column;
   gap: 0;
-  transition: all 0.3s ease-out;
+  transition: gap 0.3s ease-out;
 }
 
 /* Smooth height transition when chips are removed */
@@ -1791,7 +1794,7 @@ body.group-dragging .group-nav-button {
   background: color-mix(in srgb, var(--card-bg) calc(var(--custom-surface-opacity) + 66%), transparent);
   color: color-mix(in srgb, var(--ink) 70%, var(--muted) 30%);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.2s;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1868,7 +1871,7 @@ body.group-dragging .group-nav-button {
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
   z-index: 100;
   opacity: 0;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -2437,7 +2440,7 @@ footer {
   font-weight: 300;
   color: var(--ink);
   line-height: 1;
-  transition: all 0.3s;
+  transition: color 0.3s;
 }
 
 .stat-label {
@@ -2494,6 +2497,16 @@ header { animation: fadeUp 0.5s ease both; }
 .abandoned-section .section-header { animation: fadeUp 0.5s ease 0.45s both; }
 footer { animation: fadeUp 0.5s ease 0.65s both; }
 .deferred-column .section-header { animation: fadeUp 0.5s ease 0.1s both; }
+
+body.dashboard-refreshing .active-section .missions .mission-card,
+body.dashboard-refreshing .deferred-list .deferred-item,
+body.dashboard-refreshing .active-section .section-header,
+body.dashboard-refreshing .abandoned-section .section-header,
+body.dashboard-refreshing .tab-cleanup-banner,
+body.dashboard-refreshing .nudge-banner,
+body.dashboard-refreshing footer {
+  animation: none !important;
+}
 
 
 /* ================================================================
@@ -3011,6 +3024,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   border-bottom: 1px solid rgba(154, 145, 138, 0.12);
   animation: fadeUp 0.3s ease both;
   position: relative;
+  contain: layout paint style;
 }
 
 .deferred-item:last-child {
@@ -3028,7 +3042,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   cursor: pointer;
   flex-shrink: 0;
   margin-top: 1px;
-  transition: all 0.2s;
+  transition: border-color 0.2s, background 0.2s;
   position: relative;
 }
 
@@ -3439,6 +3453,8 @@ body.page-chip-list-dragging .chip-reorder-handle {
 .todo-list {
   display: flex;
   flex-direction: column;
+  content-visibility: auto;
+  contain-intrinsic-size: 320px;
 }
 
 .todo-item {
@@ -3448,6 +3464,7 @@ body.page-chip-list-dragging .chip-reorder-handle {
   padding: 12px 0;
   border-bottom: 1px solid rgba(154, 145, 138, 0.12);
   position: relative;
+  contain: layout paint style;
 }
 
 .todo-checkbox {

@@ -5,7 +5,12 @@
  * The toolbar badge is intentionally kept empty.
  */
 
-console.log('[tab-harbor bg] Service worker loaded, registering event listeners...');
+const TAB_HARBOR_BACKGROUND_DEBUG = false;
+const debugLog = (...args) => {
+  if (TAB_HARBOR_BACKGROUND_DEBUG) console.log(...args);
+};
+
+debugLog('[tab-harbor bg] Service worker loaded, registering event listeners...');
 
 async function updateBadge() {
   try {
@@ -26,10 +31,9 @@ async function notifyTabHarborPages() {
     // Query all tabs and filter manually for more reliable matching
     const allTabs = await chrome.tabs.query({});
 
-    // Debug: Log ALL tab URLs to see what we're working with
-    console.log(`[tab-harbor bg] Total tabs: ${allTabs.length}`);
+    debugLog(`[tab-harbor bg] Total tabs: ${allTabs.length}`);
     allTabs.forEach((tab, idx) => {
-      console.log(`[tab-harbor bg] Tab ${idx}: ID=${tab.id}, URL=${tab.url || 'N/A'}, Title=${tab.title || 'N/A'}`);
+      debugLog(`[tab-harbor bg] Tab ${idx}: ID=${tab.id}, URL=${tab.url || 'N/A'}, Title=${tab.title || 'N/A'}`);
     });
 
     const dashboardTabs = allTabs.filter(tab => {
@@ -43,10 +47,10 @@ async function notifyTabHarborPages() {
       );
     });
 
-    console.log(`[tab-harbor bg] Found ${dashboardTabs.length} Tab Harbor page(s) to notify`);
+    debugLog(`[tab-harbor bg] Found ${dashboardTabs.length} Tab Harbor page(s) to notify`);
 
     if (dashboardTabs.length === 0) {
-      console.log('[tab-harbor bg] No Tab Harbor pages open, skipping notification');
+      debugLog('[tab-harbor bg] No Tab Harbor pages open, skipping notification');
       return;
     }
 
@@ -55,7 +59,7 @@ async function notifyTabHarborPages() {
     for (const tab of dashboardTabs) {
       try {
         await chrome.tabs.sendMessage(tab.id, { action: 'tabs-changed' });
-        console.log(`[tab-harbor bg] Notified tab ${tab.id}`);
+        debugLog(`[tab-harbor bg] Notified tab ${tab.id}`);
         successCount++;
       } catch (err) {
         // Tab might be closed or not ready, ignore
@@ -63,7 +67,7 @@ async function notifyTabHarborPages() {
       }
     }
 
-    console.log(`[tab-harbor bg] Successfully notified ${successCount}/${dashboardTabs.length} page(s)`);
+    debugLog(`[tab-harbor bg] Successfully notified ${successCount}/${dashboardTabs.length} page(s)`);
   } catch (err) {
     console.warn('[tab-harbor bg] Error in notifyTabHarborPages:', err);
   }
