@@ -3,6 +3,7 @@
   "name": "Tab Harbor",
   "version": "1.0.1",
   "description": "A new tab dashboard for organizing open tabs, quick links, todos, and saved reads in one calm workspace.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwNLltq5Lznuw5AT348NS3stwI0HwcNFeGlfae9nYaWhspJRNVsqHUQ8A3eT8bSeqwU1eFGMY1dLnZ66K/RRM6YqGk6exswqN2tvYgphBFF8kj0Ms+EFloslPGDYjFAUP8THg/67+D0zjNH6J/YmtgzawaoU4rOWet283jiaK1V0Ns/5woM1eRKdsc7vQi5iRNfk0jfLLSbP/JvUf7cc5fZIv6MaOP7yWBFgukUTfaaisbIxwbuUFWiOT9K6F96FGYLv1g0DZtNLFtJXMen2JTrUzM4LzX1xXFImxln6MtbmUS4UbII1b6bXQW+g3Vch2scQHrxNrCm4DlUbY2j9C8wIDAQAB",
   "permissions": ["tabs", "storage", "search", "clipboardRead", "tabGroups"],
   "chrome_url_overrides": { "newtab": "index.html" },
   "background": { "service_worker": "background.js" },

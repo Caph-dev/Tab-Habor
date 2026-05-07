@@ -188,6 +188,13 @@ test('manifest keeps only permissions required by the shipped runtime', () => {
   assert.doesNotMatch(manifest, /"activeTab"/);
 });
 
+test('manifest keeps a fixed development key for stable unpacked extension id', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'manifest.json'), 'utf8'));
+
+  assert.equal(typeof manifest.key, 'string');
+  assert.ok(manifest.key.length > 300);
+});
+
 test('footer credits point to the repo and OO GitHub profile', () => {
   const css = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf8');
 
