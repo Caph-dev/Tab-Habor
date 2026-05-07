@@ -14,6 +14,8 @@
         completed: Boolean(todo.completed),
         completedAt: todo.completedAt || null,
         dismissed: Boolean(todo.dismissed),
+        deletedAt: todo.deletedAt || null,
+        updatedAt: todo.updatedAt || todo.deletedAt || todo.completedAt || todo.createdAt || new Date().toISOString(),
       }));
   }
 
@@ -57,6 +59,7 @@
       return {
         ...todo,
         dismissed: true,
+        updatedAt: new Date().toISOString(),
       };
     });
   }
@@ -67,12 +70,13 @@
       return {
         ...todo,
         dismissed: true,
+        updatedAt: new Date().toISOString(),
       };
     });
   }
 
   function splitTodos(todos) {
-    const visible = normalizeTodos(todos).filter(todo => !todo.dismissed);
+    const visible = normalizeTodos(todos).filter(todo => !todo.dismissed && !todo.deletedAt);
     return {
       active: visible.filter(todo => !todo.completed),
       archived: visible.filter(todo => todo.completed),

@@ -26,6 +26,16 @@ const {
   splitTodos: drawerSplitTodos,
 } = globalThis.TabOutTodosStore || {};
 
+const {
+  initDrawerSync: drawerInitSync,
+  getSavedTabs: drawerStoreGetSavedTabs,
+  saveTabForLater: drawerStoreSaveTabForLater,
+  updateSavedTab: drawerStoreUpdateSavedTab,
+  getTodos: drawerStoreGetTodos,
+  saveTodo: drawerStoreSaveTodo,
+  updateTodo: drawerStoreUpdateTodo,
+} = globalThis.TabHarborDrawerSyncStore || {};
+
 let deferredPanelOpen = false;
 let deferredTriggerPosition = drawerNormalizeTriggerPosition ? drawerNormalizeTriggerPosition() : { top: null };
 const DEFERRED_TRIGGER_POSITION_KEY = 'deferredTriggerPosition';
@@ -58,6 +68,14 @@ if (globalThis.chrome?.storage?.onChanged?.addListener) {
   });
 }
 
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('tabharbor-drawer-sync-updated', () => {
+    invalidateSavedTabsCache();
+    invalidateTodosCache();
+    if (deferredPanelOpen) void renderDeferredColumn({ contentScope: 'all' });
+  });
+}
+
 const DRAWER_LABEL_FALLBACKS = {
   openSavedForLater: 'Open saved for later',
   closeSavedForLater: 'Close saved for later',
@@ -73,7 +91,7 @@ function drawerSavedItemsCount(count) {
 }
 
 function splitSavedTabs(deferred = []) {
-  const visible = deferred.filter(t => !t.dismissed);
+  const visible = deferred.filter(t => !t.dismissed && !t.deletedAt);
   return {
     raw: deferred,
     active: visible.filter(t => !t.completed),
@@ -257,82 +275,164 @@ function scheduleDeferredContentRender(contentScope = 'active') {
 }
 
 async function saveTabForLater(tab) {
+  if (typeof drawerStoreSaveTabForLater === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    const nextDeferred = await drawerStoreSaveTabForLater(tab);
+    setSavedTabsCache(nextDeferred);
+    return nextDeferred;
+  }
+
   const { deferred = [] } = await chrome.storage.local.get('deferred');
+  const timestamp = new Date().toISOString();
   deferred.push({
     id: Date.now().toString(),
     url: tab.url,
     title: tab.title,
-    savedAt: new Date().toISOString(),
+    savedAt: timestamp,
     completed: false,
+    completedAt: null,
     dismissed: false,
+    deletedAt: null,
+    updatedAt: timestamp,
   });
   await chrome.storage.local.set({ deferred });
   setSavedTabsCache(deferred);
+  return deferred;
 }
 
 async function getSavedTabs() {
   if (savedTabsCache) return savedTabsCache;
+  if (typeof drawerStoreGetSavedTabs === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    return setSavedTabsCache(await drawerStoreGetSavedTabs());
+  }
+
   const { deferred = [] } = await chrome.storage.local.get('deferred');
   return setSavedTabsCache(deferred);
 }
 
 async function checkOffSavedTab(id) {
+  if (typeof drawerStoreUpdateSavedTab === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    const nextDeferred = await drawerStoreUpdateSavedTab(id, {
+      completed: true,
+      completedAt: new Date().toISOString(),
+    });
+    setSavedTabsCache(nextDeferred);
+    return nextDeferred;
+  }
+
   const { deferred = [] } = await chrome.storage.local.get('deferred');
   const tab = deferred.find(t => t.id === id);
   if (tab) {
     tab.completed = true;
     tab.completedAt = new Date().toISOString();
+    tab.updatedAt = tab.completedAt;
     await chrome.storage.local.set({ deferred });
     setSavedTabsCache(deferred);
   }
+  return deferred;
 }
 
 async function dismissSavedTab(id) {
+  if (typeof drawerStoreUpdateSavedTab === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    const nextDeferred = await drawerStoreUpdateSavedTab(id, {
+      dismissed: true,
+    });
+    setSavedTabsCache(nextDeferred);
+    return nextDeferred;
+  }
+
   const { deferred = [] } = await chrome.storage.local.get('deferred');
   const tab = deferred.find(t => t.id === id);
   if (tab) {
     tab.dismissed = true;
+    tab.updatedAt = new Date().toISOString();
     await chrome.storage.local.set({ deferred });
     setSavedTabsCache(deferred);
   }
+  return deferred;
 }
 
 async function restoreSavedTab(id) {
   const { deferred = [] } = await chrome.storage.local.get('deferred');
   const tab = deferred.find(t => t.id === id && !t.completed && !t.dismissed);
   if (tab) {
-    tab.dismissed = true;
-    await chrome.storage.local.set({ deferred });
-    setSavedTabsCache(deferred);
+    if (typeof drawerStoreUpdateSavedTab === 'function') {
+      if (typeof drawerInitSync === 'function') await drawerInitSync();
+      const nextDeferred = await drawerStoreUpdateSavedTab(id, { dismissed: true });
+      setSavedTabsCache(nextDeferred);
+    } else {
+      tab.dismissed = true;
+      tab.updatedAt = new Date().toISOString();
+      await chrome.storage.local.set({ deferred });
+      setSavedTabsCache(deferred);
+    }
     return { url: tab.url, title: tab.title };
   }
   return null;
 }
 
 async function deleteArchivedTab(id) {
+  if (typeof drawerStoreUpdateSavedTab === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    const timestamp = new Date().toISOString();
+    const nextDeferred = await drawerStoreUpdateSavedTab(id, {
+      dismissed: true,
+      deletedAt: timestamp,
+    });
+    setSavedTabsCache(nextDeferred);
+    return nextDeferred;
+  }
+
   const { deferred = [] } = await chrome.storage.local.get('deferred');
   const tab = deferred.find(t => t.id === id && t.completed && !t.dismissed);
   if (tab) {
     tab.dismissed = true;
+    tab.deletedAt = new Date().toISOString();
+    tab.updatedAt = tab.deletedAt;
     await chrome.storage.local.set({ deferred });
     setSavedTabsCache(deferred);
   }
+  return deferred;
 }
 
 async function clearArchivedTabs() {
+  if (typeof drawerStoreUpdateSavedTab === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    const saved = await drawerStoreGetSavedTabs();
+    let nextDeferred = saved;
+    for (const tab of saved.filter(item => item.completed && !item.dismissed && !item.deletedAt)) {
+      nextDeferred = await drawerStoreUpdateSavedTab(tab.id, {
+        dismissed: true,
+        deletedAt: new Date().toISOString(),
+      });
+    }
+    setSavedTabsCache(nextDeferred);
+    return nextDeferred;
+  }
+
   const { deferred = [] } = await chrome.storage.local.get('deferred');
   const nextDeferred = deferred.map(tab => {
     if (tab.completed && !tab.dismissed) {
-      return { ...tab, dismissed: true };
+      const timestamp = new Date().toISOString();
+      return { ...tab, dismissed: true, deletedAt: timestamp, updatedAt: timestamp };
     }
     return tab;
   });
   await chrome.storage.local.set({ deferred: nextDeferred });
   setSavedTabsCache(nextDeferred);
+  return nextDeferred;
 }
 
 async function getTodos() {
   if (todosCache) return todosCache;
+  if (typeof drawerStoreGetTodos === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    return setTodosCache(await drawerStoreGetTodos());
+  }
+
   const stored = await chrome.storage.local.get(TODOS_KEY);
   return setTodosCache(stored[TODOS_KEY]);
 }
@@ -344,21 +444,59 @@ async function saveTodos(todos) {
 }
 
 async function createTodoItem(payload) {
+  if (typeof drawerStoreSaveTodo === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    const nextTodos = await drawerStoreSaveTodo(payload);
+    return setTodosCache(nextTodos);
+  }
+
   const todos = await getTodos();
   return saveTodos(drawerCreateTodo(todos, payload));
 }
 
 async function completeTodoItem(id) {
+  if (typeof drawerStoreUpdateTodo === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    const nextTodos = await drawerStoreUpdateTodo(id, {
+      completed: true,
+      completedAt: new Date().toISOString(),
+    });
+    return setTodosCache(nextTodos);
+  }
+
   const todos = await getTodos();
   return saveTodos(drawerCompleteTodo(todos, id));
 }
 
 async function deleteTodoItem(id) {
+  if (typeof drawerStoreUpdateTodo === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    const timestamp = new Date().toISOString();
+    const nextTodos = await drawerStoreUpdateTodo(id, {
+      dismissed: true,
+      deletedAt: timestamp,
+    });
+    return setTodosCache(nextTodos);
+  }
+
   const todos = await getTodos();
   return saveTodos(drawerDeleteTodo(todos, id));
 }
 
 async function clearTodoArchiveItems() {
+  if (typeof drawerStoreUpdateTodo === 'function') {
+    if (typeof drawerInitSync === 'function') await drawerInitSync();
+    const todos = await drawerStoreGetTodos();
+    let nextTodos = todos;
+    for (const todo of todos.filter(item => item.completed && !item.dismissed && !item.deletedAt)) {
+      nextTodos = await drawerStoreUpdateTodo(todo.id, {
+        dismissed: true,
+        deletedAt: new Date().toISOString(),
+      });
+    }
+    return setTodosCache(nextTodos);
+  }
+
   const todos = await getTodos();
   return saveTodos(drawerClearArchivedTodos(todos));
 }

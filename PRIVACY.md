@@ -79,7 +79,7 @@ Tab Harbor does not continuously monitor or silently read clipboard contents in 
 
 ## 5. Data storage and retention
 
-Tab Harbor stores extension data locally using Chrome extension storage APIs, primarily `chrome.storage.local`.
+Tab Harbor stores extension data using Chrome extension storage APIs. Saved reads and todos may use `chrome.storage.sync` so Chrome can sync them between browser instances signed into the same Chrome account with Chrome Sync enabled. Other workspace data is stored primarily in `chrome.storage.local`.
 
 This includes items such as:
 
@@ -90,6 +90,7 @@ This includes items such as:
 - layout and ordering preferences
 
 This data remains in the browser profile until the user removes it through the extension UI, clears extension storage, or uninstalls the extension.
+Synced saved reads and todos are also subject to the user's Chrome Sync settings and Google account sync controls.
 
 ## 6. Data sharing
 

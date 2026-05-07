@@ -503,9 +503,9 @@
 
         <section id="storage">
           <h2>5. Data storage and retention</h2>
-          <p>Tab Harbor stores extension data locally using Chrome extension storage APIs, primarily <code>chrome.storage.local</code>.</p>
+          <p>Tab Harbor stores extension data using Chrome extension storage APIs. Saved reads and todos may use <code>chrome.storage.sync</code> so Chrome can sync them between browser instances signed into the same Chrome account with Chrome Sync enabled. Other workspace data is stored primarily in <code>chrome.storage.local</code>.</p>
           <p>This includes items such as quick links, saved reads, todos, theme preferences, and layout state.</p>
-          <p>This data remains in the browser profile until the user removes it through the extension UI, clears extension storage, or uninstalls the extension.</p>
+          <p>This data remains in the browser profile until the user removes it through the extension UI, clears extension storage, or uninstalls the extension. Synced saved reads and todos are also subject to the user's Chrome Sync settings and Google account sync controls.</p>
         </section>
 
         <section id="sharing">

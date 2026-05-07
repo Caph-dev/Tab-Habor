@@ -10,7 +10,7 @@
    2. Groups tabs by domain with a landing pages category
    3. Renders domain cards, banners, and stats
    4. Handles all user actions (close tabs, save for later, focus tab)
-   5. Stores "Saved for Later" tabs in chrome.storage.local (no server)
+   5. Stores "Saved for Later" tabs via Chrome storage sync with local cache (no server)
    ================================================================ */
 
 'use strict';
@@ -219,6 +219,12 @@ const {
 const {
   reorderSubsetByIds,
 } = globalThis.TabOutListOrder || {};
+
+const {
+  initDrawerSync: runtimeInitDrawerSync,
+  reorderSavedTabs: runtimeStoreReorderSavedTabs,
+  reorderTodos: runtimeStoreReorderTodos,
+} = globalThis.TabHarborDrawerSyncStore || {};
 
 const {
   compressImageFileForStorage,
@@ -1013,6 +1019,13 @@ function previewDrawerItemOrder(clientY) {
 }
 
 async function reorderSavedTabs(orderIds) {
+  if (typeof runtimeStoreReorderSavedTabs === 'function') {
+    if (typeof runtimeInitDrawerSync === 'function') await runtimeInitDrawerSync();
+    const nextDeferred = await runtimeStoreReorderSavedTabs(orderIds);
+    if (typeof setSavedTabsCache === 'function') setSavedTabsCache(nextDeferred);
+    return nextDeferred;
+  }
+
   const { deferred = [] } = await chrome.storage.local.get('deferred');
   const nextDeferred = reorderVisibleItemsByIds(
     deferred,
@@ -1025,6 +1038,13 @@ async function reorderSavedTabs(orderIds) {
 }
 
 async function reorderTodoItems(orderIds) {
+  if (typeof runtimeStoreReorderTodos === 'function') {
+    if (typeof runtimeInitDrawerSync === 'function') await runtimeInitDrawerSync();
+    const nextTodos = await runtimeStoreReorderTodos(orderIds);
+    if (typeof setTodosCache === 'function') setTodosCache(nextTodos);
+    return nextTodos;
+  }
+
   const todos = await getTodos();
   const nextTodos = reorderVisibleItemsByIds(
     todos,
@@ -3104,6 +3124,9 @@ function setupImageErrorHandlers() {
 async function initializeDashboardRuntime() {
   injectDynamicAnimationStyles();
   await loadThemePreferences();
+  if (typeof runtimeInitDrawerSync === 'function') {
+    await runtimeInitDrawerSync();
+  }
   if (typeof loadChromeTabGroupsSetting === 'function') {
     chromeTabGroupsEnabled = await loadChromeTabGroupsSetting();
   }
@@ -3163,6 +3186,12 @@ function setupTabChangeListener() {
         }
       }, 300); // Wait 300ms after last tab change
     }
+  });
+}
+
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('tabharbor-drawer-sync-error', () => {
+    showToast(runtimeT ? runtimeT('toastSyncSaveFailed') : 'Saved locally. Chrome Sync could not update.');
   });
 }
 

@@ -133,9 +133,9 @@ function showToast(message, { action } = {}) {
   const toastText = document.getElementById('toastText');
   const toastAction = document.getElementById('toastAction');
 
-  toastText.textContent = message;
+  if (toastText) toastText.textContent = message;
 
-  if (action) {
+  if (action && toastAction) {
     toastAction.textContent = action.label;
     toastAction.hidden = false;
     toastAction.onclick = async () => {
@@ -147,13 +147,13 @@ function showToast(message, { action } = {}) {
         toast.classList.remove('visible');
       }
     };
-  } else {
+  } else if (toastAction) {
     toastAction.hidden = true;
     toastAction.onclick = null;
   }
 
-  toast.classList.add('visible');
-  setTimeout(() => toast.classList.remove('visible'), 2500);
+  toast?.classList?.add('visible');
+  setTimeout(() => toast?.classList?.remove('visible'), 2500);
 }
 
 function setImageFallbackAttributes(imgEl, fallbackUrl = '') {
